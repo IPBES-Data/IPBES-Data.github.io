@@ -1,0 +1,95 @@
+---
+title: "Repository List"
+format:
+    html:
+        toc: true
+        toc-depth: 2
+        embed-resources: true
+        code-fold: true
+        code-summary: "Show the code"
+---
+
+This document contains a list of repositories in the [IPBES-Data GitHub organization](https://github.com/IPBES-Data).
+
+The repo names are read in dynamically from the GitHub API, and this document will be updatead on a regular basis by a github action.
+
+```{r}
+#| label: setup
+
+library(gh)
+library(data.tree)
+library(knitr)
+library(kableExtra)
+library(stringr)
+
+assessments <- read.csv(file.path("input", "assessments.csv"))
+```
+
+```{r}
+```
+
+```{r}
+#| label: get_repos
+#|
+
+# Use the gh function to interact with the GitHub API
+repos <- gh("GET /orgs/:org/repos", org = "IPBES-Data") |>
+  # Extract the relevant info of the repositories
+  lapply(
+    FUN = function(x) {
+      data.frame(
+        repoName = x$name,
+        private = x$private,
+        description = ifelse(is.null(x$description), NA, x$description),
+        url = x$html_url,
+        issues_open = x$open_issues_count
+      )
+    }
+  ) |>
+  do.call(what = rbind)
+
+
+repos <- rbind(
+  c("IPBES", "", "", "", ""),
+  repos
+)
+
+repos$pathString <- gsub(repos$repoName, pattern = "_", replacement = "/")
+
+tree <- FromDataFrameTable(repos)
+```
+
+```{r}
+#| label: create_directory
+#| output: asis
+
+df <- ToDataFrameTree(
+  tree,
+  "link",
+  # "issues_open",
+  # "private",
+  "repoName",
+  "url"
+) |>
+  dplyr::mutate(
+    link = ifelse(
+      is.na(url),
+      "",
+      paste0('<a href="', url, '">', repoName, "</a>")
+    ),
+    url = NULL,
+    levelName = paste0("`", levelName, "`"),
+    repoName = NULL
+  ) |>
+  dplyr::mutate(
+    md_header = levelName,
+    md_header = gsub("`", "", md_header),
+    md_header = trimws(md_header),
+    md_header = gsub("\\ |-|¦|°", "@", md_header),
+    n = stringr::str_count(md_header, "@")
+  )
+
+cat("\n\n## Test 1\n\n")
+cat("\n\n## Test 2\n\n")
+
+```

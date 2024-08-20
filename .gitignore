@@ -48,3 +48,5 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 IPBES-Data.github.io.code-workspace
+
+/.quarto/
