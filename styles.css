@@ -307,15 +307,9 @@ h2 {
   color: #4c5c48;
 }
 
+.assessment-card.is-hidden,
+.tg-card.is-hidden,
 .app-card.is-hidden {
-  display: none;
-}
-
-.tg-card.is-hidden {
-  display: none;
-}
-
-.assessment-card.is-hidden {
   display: none;
 }
 

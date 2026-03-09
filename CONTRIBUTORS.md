@@ -10,4 +10,4 @@
 ## Notes
 - The assistant contribution reflects interactive coding support during this repository session.
 - Model/runtime versions for hosted assistants are managed by the provider and may change over time.
-- Repository source version is tracked in `VERSION` (current: `0.1.0`).
+- Repository source version is tracked in `VERSION` (current: `0.2.0`).

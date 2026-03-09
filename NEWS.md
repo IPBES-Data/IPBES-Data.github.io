@@ -26,9 +26,14 @@
 
 ### Versioning
 - Added a `VERSION` file to track the website source version.
-- Current version: `0.1.0`.
+- Current version: `0.2.0`.
 - Added automatic version sync from `NEWS.md` to `VERSION` during render.
-- Added website footer version display sourced from `NEWS.md` (shown as `Website version: 0.1.0`).
+- Added website footer version display sourced from `NEWS.md` (shown as `Website version: 0.2.0`).
+
+### Simplification
+- Refactored shared site data logic into reusable scripts to reduce duplicated code in page source files.
+- Refactored shared version-parsing logic for render scripts.
+- Simplified CSS selector duplication with no visual or functional change.
 
 ## 2026-03-06
 
