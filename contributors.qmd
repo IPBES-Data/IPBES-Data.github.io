@@ -1,0 +1,5 @@
+---
+title: "Contributors"
+---
+
+{{< include CONTRIBUTORS.md >}}

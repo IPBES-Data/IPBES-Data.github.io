@@ -1,21 +1,33 @@
 project:
   type: website
-  output-dir: docs
+  output-dir: _site
+  pre-render:
+    - Rscript scripts/sync_version_from_news.R
+  post-render:
+    - Rscript scripts/inject_footer_version.R
+  render:
+    - index.qmd
+    - about.qmd
+    - repos.qmd
+    - news.qmd
+    - contributors.qmd
 
 website:
-  title: "PBES Data Unit"
+  title: "IPBES Data Unit"
   navbar:
     left:
       - href: index.qmd
         text: Home
       - about.qmd
       - repos.qmd
+      - news.qmd
+      - contributors.qmd
+  page-footer:
+    left: "[News](news.qmd) | [Contributors](contributors.qmd)"
+    right: "Website version: SITE_VERSION_TOKEN"
 
 format:
   html:
     theme: cosmo
     css: styles.css
     toc: true
-
-
-

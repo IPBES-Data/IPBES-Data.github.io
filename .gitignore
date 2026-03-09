@@ -48,3 +48,8 @@ rsconnect/
 IPBES-Data.github.io.code-workspace
 
 /.quarto/
+
+/docs/
+/_site/
+
+**/*.quarto_ipynb

@@ -2,7 +2,4 @@
 title: "About"
 ---
 
-Copyright:
-
-Author:
-
+{{< include content/about/overview.md >}}
