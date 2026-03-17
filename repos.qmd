@@ -12,21 +12,14 @@ execute:
 
 This document lists repositories in the [IPBES-Data GitHub organization](https://github.com/IPBES-Data).
 
-Assessment directory links point to published pages under [IPBES_Assessment_Directories](https://ipbes-data.github.io/IPBES_Assessment_Directories/), with paths configured in `input/assessment_directory_map.csv`.
-
 ```{r}
-library(knitr)
 source("scripts/site_data_utils.R")
 
-assessment_pages_base <- "https://ipbes-data.github.io/IPBES_Assessment_Directories"
 tg_directory_page <- "https://ipbes-data.github.io/IPBES_TG_Directory/"
-shinyapps_account <- Sys.getenv("SHINYAPPS_ACCOUNT", unset = "ipbes-data")
 
 inputs <- load_site_inputs()
 assessments <- inputs$assessments
-dir_map <- inputs$dir_map
 tg_labels_fallback <- inputs$tg_labels_fallback
-shiny_apps_fallback <- inputs$shiny_apps_fallback
 
 repo_result <- get_org_repos_for_repos(org = "IPBES-Data")
 repos <- repo_result$data
@@ -36,89 +29,146 @@ tg_result <- load_tg_labels(tg_labels_fallback, directory_url = tg_directory_pag
 tg_pages <- tg_result$data
 tg_source <- tg_result$source
 
-shiny_result <- load_shiny_apps(shiny_apps_fallback, account_name = shinyapps_account)
-shiny_apps <- shiny_result$data
-shiny_source <- shiny_result$source
-
 if (nrow(repos) > 0 && nrow(tg_pages) > 0) {
   tg_repo_names <- repos$repo_name[grepl("^IPBES_TG_", repos$repo_name)]
   tg_pages <- tg_pages[tg_pages$repo_name %in% tg_repo_names, , drop = FALSE]
   tg_pages <- order_tg_labels(tg_pages)
 }
+
+assessment_repo_summary <- summarize_assessment_repositories(repos, assessments, repo_name_col = "repo_name")
+assessment_repos <- assessment_repo_summary$data
+
+assessment_lookup <- unique(data.frame(
+  assessment_abbreviation = toupper(assessments$abbreviation),
+  Assessment = assessments$short_name,
+  stringsAsFactors = FALSE
+))
+
+format_archived <- function(x) {
+  ifelse(is.na(x), "Unknown", ifelse(x, "Yes", "No"))
+}
 ```
 
-## Assessment Directories
+## Assessment-Related Repositories
 
 Repository source for dynamic lists: `r repo_source`.
 
 ```{r}
-directory_paths <- vapply(
-  assessments$abbreviation,
-  get_assessment_directory_path,
-  character(1),
-  map_df = dir_map
-)
+if (nrow(assessment_repos) == 0) {
+  cat("No assessment-related repositories found.")
+} else {
+  assessment_repos$assessment_abbreviation <- toupper(assessment_repos$assessment_abbreviation)
+  assessment_repos <- merge(
+    assessment_repos,
+    assessment_lookup,
+    by = "assessment_abbreviation",
+    all.x = TRUE,
+    sort = FALSE
+  )
 
-assessment_dirs <- data.frame(
-  Assessment = assessments$short_name,
-  Abbreviation = assessments$abbreviation,
-  `Directory path` = directory_paths,
-  `Assessment directory` = vapply(
-    directory_paths,
-    format_assessment_dir_link,
-    character(1),
-    base_url = assessment_pages_base
-  ),
-  stringsAsFactors = FALSE
-)
+  assessment_repos$Assessment <- ifelse(
+    is.na(assessment_repos$Assessment) | !nzchar(assessment_repos$Assessment),
+    assessment_repos$assessment_abbreviation,
+    assessment_repos$Assessment
+  )
 
-kable(assessment_dirs, escape = FALSE)
+  assessment_order <- match(assessment_repos$assessment_abbreviation, assessment_lookup$assessment_abbreviation)
+  assessment_repos <- assessment_repos[order(assessment_order, tolower(assessment_repos$repo_name)), , drop = FALSE]
+
+  assessment_repos$Repository <- paste0(
+    "<a href='", assessment_repos$url, "' target='_blank' rel='noopener'>", assessment_repos$repo_name, "</a>"
+  )
+  assessment_repos$Archived <- format_archived(assessment_repos$archived)
+
+  out <- assessment_repos[, c("Assessment", "Repository", "description", "Archived")]
+  names(out) <- c("Assessment", "Repository", "Description", "Archived")
+
+  DT::datatable(
+    out,
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 25,
+      autoWidth = TRUE
+    )
+  )
+}
 ```
 
 ## Technical Guidelines
 
-Names and links are taken from the published TG Directory page (source: `r tg_source`).
+Names are taken from the published TG Directory page (source: `r tg_source`).
 
 ```{r}
 if (nrow(tg_pages) == 0) {
   cat("No technical guideline pages found.")
 } else {
-  tg_table <- data.frame(
-    `Technical guideline` = paste0("<a href='", tg_pages$page_url, "' target='_blank' rel='noopener'>", tg_pages$title, "</a>"),
-    stringsAsFactors = FALSE
+  tg_meta <- repos[repos$repo_name %in% tg_pages$repo_name, c("repo_name", "url", "description", "archived"), drop = FALSE]
+  tg_table <- merge(tg_pages, tg_meta, by = "repo_name", all.x = TRUE, sort = FALSE)
+
+  tg_table$Name <- paste0(
+    "<a href='", tg_table$page_url, "' target='_blank' rel='noopener'>", tg_table$title, "</a>"
   )
-  kable(tg_table, escape = FALSE)
+  tg_table$Repository <- ifelse(
+    !is.na(tg_table$url) & nzchar(tg_table$url),
+    paste0("<a href='", tg_table$url, "' target='_blank' rel='noopener'>", tg_table$repo_name, "</a>"),
+    tg_table$repo_name
+  )
+  tg_table$Description <- ifelse(is.na(tg_table$description), "", tg_table$description)
+  tg_table$Archived <- format_archived(tg_table$archived)
+
+  out <- tg_table[, c("Name", "Repository", "Description", "Archived")]
+
+  DT::datatable(
+    out,
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 25,
+      autoWidth = TRUE
+    )
+  )
 }
 ```
 
-## Shiny Apps
-
-Apps are queried dynamically from account `r shinyapps_account` (source: `r shiny_source`).
-
-```{r}
-if (nrow(shiny_apps) == 0) {
-  cat("No Shiny apps found.")
-} else {
-  apps_table <- data.frame(
-    `App` = paste0("<a href='", shiny_apps$url, "' target='_blank' rel='noopener'>", shiny_apps$title, "</a>"),
-    `Status` = ifelse(nzchar(shiny_apps$status), shiny_apps$status, ""),
-    stringsAsFactors = FALSE
-  )
-  kable(apps_table, escape = FALSE)
-}
-```
-
-## All Repositories
+## Other Repositories
 
 ```{r}
 if (nrow(repos) == 0) {
   cat("Repository data is currently unavailable from the GitHub API.")
 } else {
-  repos <- repos[order(tolower(repos$repo_name)), , drop = FALSE]
-  repos$Repository <- paste0("<a href='", repos$url, "' target='_blank' rel='noopener'>", repos$repo_name, "</a>")
-  repos$Description <- repos$description
+  assessment_repo_names <- if (nrow(assessment_repos) > 0) assessment_repos$repo_name else character(0)
 
-  repo_table <- repos[, c("Repository", "Description")]
-  kable(repo_table, escape = FALSE)
+  other_repos <- repos[
+    !(repos$repo_name %in% assessment_repo_names) & !grepl("^IPBES_TG_", repos$repo_name),
+    ,
+    drop = FALSE
+  ]
+
+  if (nrow(other_repos) == 0) {
+    cat("No other repositories found.")
+  } else {
+    other_repos <- other_repos[order(tolower(other_repos$repo_name)), , drop = FALSE]
+    other_repos$Repository <- paste0(
+      "<a href='", other_repos$url, "' target='_blank' rel='noopener'>", other_repos$repo_name, "</a>"
+    )
+    other_repos$Description <- other_repos$description
+    other_repos$Archived <- format_archived(other_repos$archived)
+
+    out <- other_repos[, c("Repository", "Description", "Archived")]
+
+    DT::datatable(
+      out,
+      escape = FALSE,
+      rownames = FALSE,
+      filter = "top",
+      options = list(
+        pageLength = 25,
+        autoWidth = TRUE
+      )
+    )
+  }
 }
 ```

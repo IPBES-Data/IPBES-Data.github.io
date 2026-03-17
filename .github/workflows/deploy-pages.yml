@@ -2,7 +2,7 @@ name: Render and Deploy Website
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -24,13 +24,9 @@ jobs:
 
       - name: Install R dependencies
         run: |
-          Rscript -e 'install.packages(c("gh", "knitr", "data.tree", "rvest", "rsconnect"), repos = "https://cloud.r-project.org")'
+          Rscript -e 'install.packages(c("gh", "knitr", "data.tree", "rvest", "DT"), repos = "https://cloud.r-project.org")'
 
       - name: Render website
-        env:
-          SHINYAPPS_ACCOUNT: ipbes-data
-          SHINYAPPS_TOKEN: ${{ secrets.SHINYAPPS_TOKEN }}
-          SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
         run: quarto render
 
       - name: Deploy to gh-pages branch

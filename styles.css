@@ -1,11 +1,9 @@
 :root {
-  --bg-soft: #f2f5ea;
   --bg-strong: #d9e6cb;
   --ink: #182416;
   --ink-soft: #2f3f2a;
   --accent: #0f6b48;
   --accent-strong: #0a4f35;
-  --card: #f9fbf5;
   --line: rgba(24, 36, 22, 0.14);
   --shadow: 0 20px 45px rgba(11, 42, 24, 0.13);
   --radius-xl: 28px;
@@ -134,185 +132,6 @@ h2 {
   letter-spacing: -0.015em;
 }
 
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem;
-}
-
-.feature-card {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(223, 236, 208, 0.78));
-  padding: 1rem;
-  min-height: 215px;
-  display: flex;
-  flex-direction: column;
-  animation: rise 680ms ease both;
-}
-
-.feature-title {
-  margin: 0;
-  margin-bottom: 0.45rem;
-  font-size: 1.06rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.feature-text {
-  margin: 0 0 0.8rem;
-  color: var(--ink-soft);
-  flex: 1;
-}
-
-.feature-link {
-  color: var(--accent-strong);
-  font-weight: 700;
-}
-
-.search-wrap {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.65);
-}
-
-.search-wrap label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-size: 0.83rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-soft);
-  font-weight: 700;
-}
-
-#assessment-filter {
-  width: 100%;
-  border: 1px solid rgba(24, 36, 22, 0.22);
-  border-radius: 12px;
-  padding: 0.68rem 0.75rem;
-  background: #fff;
-}
-
-#assessment-filter:focus {
-  outline: none;
-  border-color: rgba(15, 107, 72, 0.55);
-  box-shadow: 0 0 0 3px rgba(15, 107, 72, 0.14);
-}
-
-.search-count,
-.search-empty {
-  margin: 0.6rem 0 0;
-  color: var(--ink-soft);
-}
-
-.assessment-grid {
-  margin-top: 0.85rem;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
-}
-
-.assessment-card {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 0.95rem;
-  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
-}
-
-.assessment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(13, 55, 34, 0.12);
-}
-
-.assessment-title {
-  margin-top: 0;
-  margin-bottom: 0.3rem;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.assessment-card p {
-  margin-bottom: 0.7rem;
-  color: var(--ink-soft);
-  font-size: 0.92rem;
-  overflow-wrap: anywhere;
-}
-
-.assessment-tag {
-  display: inline-block;
-  padding: 0.24rem 0.52rem;
-  border-radius: 999px;
-  border: 1px solid rgba(13, 55, 34, 0.2);
-  background: rgba(15, 107, 72, 0.1);
-  color: var(--accent-strong);
-  font-weight: 800;
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
-}
-
-.assessment-repos {
-  margin-top: 0.72rem;
-  margin-bottom: 0;
-  font-size: 0.83rem;
-}
-
-.assessment-repos span {
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.assessment-repos a {
-  color: var(--accent-strong);
-  overflow-wrap: anywhere;
-}
-
-.assessment-repos-empty {
-  color: #6a7567;
-  font-style: italic;
-}
-
-.tg-grid,
-.app-grid {
-  margin-top: 0.85rem;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.tg-card,
-.app-card {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
-  padding: 0.8rem 0.9rem;
-}
-
-.tg-card a,
-.app-card a {
-  color: var(--accent-strong);
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.tg-empty {
-  color: #6a7567;
-}
-
-.app-status {
-  margin: 0.45rem 0 0;
-  font-size: 0.82rem;
-  color: #4c5c48;
-}
-
-.assessment-card.is-hidden,
-.tg-card.is-hidden,
-.app-card.is-hidden {
-  display: none;
-}
-
 @keyframes rise {
   from {
     transform: translateY(12px);
@@ -332,10 +151,6 @@ h2 {
   .hero-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-
-  .feature-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 700px) {
@@ -343,11 +158,7 @@ h2 {
     padding: 1.2rem;
   }
 
-  .hero-metrics,
-  .feature-grid,
-  .assessment-grid,
-  .tg-grid,
-  .app-grid {
+  .hero-metrics {
     grid-template-columns: 1fr;
   }
 }

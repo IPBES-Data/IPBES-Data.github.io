@@ -12,27 +12,17 @@ format:
 
 source("scripts/site_data_utils.R")
 
-assessment_pages_base <- "https://ipbes-data.github.io/IPBES_Assessment_Directories"
 tg_directory_page <- "https://ipbes-data.github.io/IPBES_TG_Directory/"
-shinyapps_account <- Sys.getenv("SHINYAPPS_ACCOUNT", unset = "ipbes-data")
 
 inputs <- load_site_inputs()
 assessments <- inputs$assessments
-dir_map <- inputs$dir_map
 tg_labels_fallback <- inputs$tg_labels_fallback
-shiny_apps_fallback <- inputs$shiny_apps_fallback
 
 repo_result <- get_org_repos_for_index(org = "IPBES-Data")
 org_repos <- repo_result$data
-repo_source <- repo_result$source
 
 tg_result <- load_tg_labels(tg_labels_fallback, directory_url = tg_directory_page)
 tg_pages <- tg_result$data
-tg_source <- tg_result$source
-
-shiny_result <- load_shiny_apps(shiny_apps_fallback, account_name = shinyapps_account)
-shiny_apps <- shiny_result$data
-shiny_source <- shiny_result$source
 
 if (nrow(org_repos) > 0 && nrow(tg_pages) > 0) {
   tg_repo_names <- org_repos$repo_name[grepl("^IPBES_TG_", org_repos$repo_name)]
@@ -40,9 +30,12 @@ if (nrow(org_repos) > 0 && nrow(tg_pages) > 0) {
   tg_pages <- order_tg_labels(tg_pages)
 }
 
-n_assessments <- nrow(assessments)
+assessment_repo_summary <- summarize_assessment_repositories(org_repos, assessments, repo_name_col = "repo_name")
+
+n_assessments <- assessment_repo_summary$n_assessments
+n_assessment_repositories <- assessment_repo_summary$n_repositories
 n_tg_repos <- nrow(tg_pages)
-n_shiny_apps <- nrow(shiny_apps)
+n_other_repositories <- max(0L, as.integer(nrow(org_repos) - n_assessment_repositories - n_tg_repos))
 ```
 
 ::: {.hero-panel}
@@ -53,169 +46,19 @@ n_shiny_apps <- nrow(shiny_apps)
 ::: {.hero-metrics}
 ::: {.metric-card}
 <p class="metric-value">`r n_assessments`</p>
-<p class="metric-label">Assessment Streams</p>
+<p class="metric-label">Assessments</p>
+:::
+::: {.metric-card}
+<p class="metric-value">`r n_assessment_repositories`</p>
+<p class="metric-label">Assessment Related Repositories</p>
 :::
 ::: {.metric-card}
 <p class="metric-value">`r n_tg_repos`</p>
-<p class="metric-label">Technical Guideline Pages</p>
+<p class="metric-label">Technical Guidelines</p>
 :::
 ::: {.metric-card}
-<p class="metric-value">`r n_shiny_apps`</p>
-<p class="metric-label">Published Shiny Apps</p>
+<p class="metric-value">`r n_other_repositories`</p>
+<p class="metric-label">Other repositories</p>
 :::
 :::
 :::
-
-## What You Can Do Here
-
-{{< include content/home/features.md >}}
-
-## Assessment Explorer {#assessment-explorer}
-
-{{< include content/home/explorer_intro.md >}}
-
-::: {.search-wrap}
-<label for="assessment-filter">Find an assessment</label>
-<input id="assessment-filter" type="search" placeholder="Try: Nexus, IAS, Transformative..." autocomplete="off">
-<p id="assessment-count" class="search-count"></p>
-<p id="assessment-empty" class="search-empty" hidden>No assessment matches your search.</p>
-:::
-
-::: {.assessment-grid #assessment-grid}
-```{r}
-#| echo: false
-#| results: asis
-
-for (i in seq_len(nrow(assessments))) {
-  row <- assessments[i, ]
-  search_blob <- tolower(paste(row$full_name, row$short_name, row$abbreviation))
-  directory_link <- build_assessment_directory_link_html(row$abbreviation, dir_map, assessment_pages_base)
-
-  cat(
-    paste0(
-      "<article class='assessment-card' data-search='", escape_html(search_blob), "'>",
-      "<p class='assessment-title'>", escape_html(row$short_name), "</p>",
-      "<p>", escape_html(row$full_name), "</p>",
-      "<span class='assessment-tag'>", escape_html(row$abbreviation), "</span>",
-      "<p class='assessment-repos'><span>Assessment directory:</span> ",
-      directory_link,
-      "</p>",
-      "</article>"
-    )
-  )
-}
-```
-:::
-
-## Technical Guidelines {#technical-guidelines}
-
-Technical guideline titles are taken from the published TG Directory page (source: `r tg_source`).
-
-::: {.search-wrap}
-<label for="tg-filter">Find a technical guideline</label>
-<input id="tg-filter" type="search" placeholder="Try: Part 3, Colour, Zenodo..." autocomplete="off">
-<p id="tg-count" class="search-count"></p>
-<p id="tg-empty" class="search-empty" hidden>No technical guideline matches your search.</p>
-:::
-
-::: {.tg-grid}
-```{r}
-#| echo: false
-#| results: asis
-
-if (nrow(tg_pages) == 0) {
-  cat("<p class='tg-empty'>No technical guideline pages found.</p>")
-} else {
-  for (i in seq_len(nrow(tg_pages))) {
-    row <- tg_pages[i, ]
-    search_blob <- tolower(paste(row$title, row$repo_name))
-    cat(
-      paste0(
-        "<article class='tg-card' data-search='", escape_html(search_blob), "'>",
-        "<a href='", escape_html(row$page_url), "' target='_blank' rel='noopener'>",
-        escape_html(row$title),
-        "</a>",
-        "</article>"
-      )
-    )
-  }
-}
-```
-:::
-
-## Shiny Apps
-
-Published apps for account `r shinyapps_account` (source: `r shiny_source`).
-
-::: {.search-wrap}
-<label for="app-filter">Find a Shiny app</label>
-<input id="app-filter" type="search" placeholder="Try: dashboard, indicator, explorer..." autocomplete="off">
-<p id="app-count" class="search-count"></p>
-<p id="app-empty" class="search-empty" hidden>No Shiny app matches your search.</p>
-:::
-
-::: {.app-grid}
-```{r}
-#| echo: false
-#| results: asis
-
-if (nrow(shiny_apps) == 0) {
-  cat("<p class='tg-empty'>No Shiny apps found.</p>")
-} else {
-  for (i in seq_len(nrow(shiny_apps))) {
-    row <- shiny_apps[i, ]
-    search_blob <- tolower(paste(row$title, row$name, row$status))
-    status_html <- if (nzchar(row$status)) {
-      paste0("<p class='app-status'>Status: ", escape_html(row$status), "</p>")
-    } else {
-      ""
-    }
-    cat(
-      paste0(
-        "<article class='app-card' data-search='", escape_html(search_blob), "'>",
-        "<a href='", escape_html(row$url), "' target='_blank' rel='noopener'>",
-        escape_html(row$title),
-        "</a>",
-        status_html,
-        "</article>"
-      )
-    )
-  }
-}
-```
-:::
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  function wireFilter(inputId, cardSelector, countId, emptyId) {
-    const input = document.getElementById(inputId);
-    const cards = Array.from(document.querySelectorAll(cardSelector));
-    const count = document.getElementById(countId);
-    const empty = document.getElementById(emptyId);
-
-    if (!input || cards.length === 0) return;
-
-    function applyFilter() {
-      const query = input.value.trim().toLowerCase();
-      let visible = 0;
-
-      cards.forEach(function (card) {
-        const haystack = card.dataset.search || "";
-        const show = query === "" || haystack.includes(query);
-        card.classList.toggle("is-hidden", !show);
-        if (show) visible += 1;
-      });
-
-      count.textContent = visible + (visible === 1 ? " result" : " results");
-      empty.hidden = visible !== 0;
-    }
-
-    input.addEventListener("input", applyFilter);
-    applyFilter();
-  }
-
-  wireFilter("assessment-filter", ".assessment-card", "assessment-count", "assessment-empty");
-  wireFilter("tg-filter", ".tg-card", "tg-count", "tg-empty");
-  wireFilter("app-filter", ".app-card", "app-count", "app-empty");
-});
-</script>

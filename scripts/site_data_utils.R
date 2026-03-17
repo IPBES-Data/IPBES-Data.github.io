@@ -22,10 +22,10 @@ filter_required_nonempty <- function(df, required_cols) {
     }
   }
 
-  keep <- rep(TRUE, nrow(df))
-  for (col in required_cols) {
-    keep <- keep & !is.na(df[[col]]) & nzchar(df[[col]])
-  }
+  keep <- Reduce(
+    f = `&`,
+    x = lapply(required_cols, function(col) !is.na(df[[col]]) & nzchar(df[[col]]))
+  )
 
   df[keep, , drop = FALSE]
 }
@@ -34,7 +34,6 @@ load_site_inputs <- function(input_dir = "input") {
   assessments <- read_trimmed_csv(file.path(input_dir, "assessments.csv"))
   dir_map <- read_trimmed_csv(file.path(input_dir, "assessment_directory_map.csv"))
   tg_labels_fallback <- read_trimmed_csv(file.path(input_dir, "technical_guideline_labels.csv"))
-  shiny_apps_fallback <- read_trimmed_csv(file.path(input_dir, "shiny_apps_fallback.csv"))
 
   dir_map <- filter_required_nonempty(dir_map, c("abbreviation", "directory_path"))
   tg_labels_fallback <- filter_required_nonempty(tg_labels_fallback, c("repo_name", "title", "page_url"))
@@ -42,14 +41,19 @@ load_site_inputs <- function(input_dir = "input") {
   list(
     assessments = assessments,
     dir_map = dir_map,
-    tg_labels_fallback = tg_labels_fallback,
-    shiny_apps_fallback = shiny_apps_fallback
+    tg_labels_fallback = tg_labels_fallback
   )
 }
 
 empty_repos <- function(include_description = FALSE) {
   if (isTRUE(include_description)) {
-    return(data.frame(repo_name = character(0), description = character(0), url = character(0), stringsAsFactors = FALSE))
+    return(data.frame(
+      repo_name = character(0),
+      description = character(0),
+      url = character(0),
+      archived = logical(0),
+      stringsAsFactors = FALSE
+    ))
   }
 
   data.frame(repo_name = character(0), repo_url = character(0), stringsAsFactors = FALSE)
@@ -57,10 +61,6 @@ empty_repos <- function(include_description = FALSE) {
 
 empty_tg_labels <- function() {
   data.frame(repo_name = character(0), title = character(0), page_url = character(0), stringsAsFactors = FALSE)
-}
-
-empty_shiny_apps <- function() {
-  data.frame(name = character(0), title = character(0), url = character(0), status = character(0), stringsAsFactors = FALSE)
 }
 
 get_cached_repos <- function(path = "tree.rds", include_description = FALSE) {
@@ -87,8 +87,7 @@ get_cached_repos <- function(path = "tree.rds", include_description = FALSE) {
   }
 
   repo_df <- repo_df[
-    !is.na(repo_df$repoName) & !is.na(repo_df$url) &
-      nzchar(repo_df$repoName) & nzchar(repo_df$url),
+    !is.na(repo_df$repoName) & !is.na(repo_df$url) & nzchar(repo_df$repoName) & nzchar(repo_df$url),
     ,
     drop = FALSE
   ]
@@ -98,6 +97,7 @@ get_cached_repos <- function(path = "tree.rds", include_description = FALSE) {
       repo_name = repo_df$repoName,
       description = ifelse(is.na(repo_df$description), "", repo_df$description),
       url = repo_df$url,
+      archived = rep(NA, nrow(repo_df)),
       stringsAsFactors = FALSE
     )
   } else {
@@ -117,13 +117,27 @@ get_org_repos_raw <- function(org = "IPBES-Data") {
   }
 
   tryCatch(
-    gh::gh("GET /orgs/:org/repos", org = org, per_page = 200),
+    gh::gh(
+      "GET /orgs/:org/repos",
+      org = org,
+      type = "public",
+      per_page = 100,
+      .limit = Inf
+    ),
     error = function(e) NULL
   )
 }
 
+is_public_repo <- function(repo) {
+  isFALSE(repo$private) || is.null(repo$private)
+}
+
 get_org_repos_for_index <- function(org = "IPBES-Data", cache_path = "tree.rds") {
   repos_raw <- get_org_repos_raw(org = org)
+
+  if (!is.null(repos_raw) && length(repos_raw) > 0) {
+    repos_raw <- Filter(is_public_repo, repos_raw)
+  }
 
   if (!is.null(repos_raw) && length(repos_raw) > 0) {
     repos_live <- data.frame(
@@ -146,10 +160,15 @@ get_org_repos_for_repos <- function(org = "IPBES-Data", cache_path = "tree.rds")
   repos_raw <- get_org_repos_raw(org = org)
 
   if (!is.null(repos_raw) && length(repos_raw) > 0) {
+    repos_raw <- Filter(is_public_repo, repos_raw)
+  }
+
+  if (!is.null(repos_raw) && length(repos_raw) > 0) {
     repos_live <- data.frame(
       repo_name = vapply(repos_raw, function(x) x$name, character(1)),
       description = vapply(repos_raw, function(x) ifelse(is.null(x$description), "", x$description), character(1)),
       url = vapply(repos_raw, function(x) x$html_url, character(1)),
+      archived = vapply(repos_raw, function(x) isTRUE(x$archived), logical(1)),
       stringsAsFactors = FALSE
     )
     return(list(data = repos_live, source = "live GitHub API"))
@@ -161,50 +180,6 @@ get_org_repos_for_repos <- function(org = "IPBES-Data", cache_path = "tree.rds")
   }
 
   list(data = empty_repos(include_description = TRUE), source = "unavailable")
-}
-
-escape_html <- function(x) {
-  x <- gsub("&", "&amp;", x, fixed = TRUE)
-  x <- gsub("<", "&lt;", x, fixed = TRUE)
-  x <- gsub(">", "&gt;", x, fixed = TRUE)
-  x <- gsub('"', "&quot;", x, fixed = TRUE)
-  x <- gsub("'", "&#39;", x, fixed = TRUE)
-  x
-}
-
-get_assessment_directory_path <- function(abbreviation, map_df) {
-  hit <- which(tolower(map_df$abbreviation) == tolower(abbreviation))
-  if (length(hit) == 0) {
-    return("")
-  }
-
-  map_df$directory_path[hit[1]]
-}
-
-build_assessment_directory_link_html <- function(abbreviation, map_df, base_url = "https://ipbes-data.github.io/IPBES_Assessment_Directories") {
-  directory_path <- get_assessment_directory_path(abbreviation, map_df)
-
-  if (!nzchar(directory_path)) {
-    return("<span class='assessment-repos-empty'>No published directory.</span>")
-  }
-
-  full_url <- paste0(base_url, "/", directory_path, "/index.html")
-  paste0(
-    "<a href='", escape_html(full_url), "' target='_blank' rel='noopener'>",
-    "IPBES_Assessment_Directories/", escape_html(directory_path), "/index.html",
-    "</a>"
-  )
-}
-
-format_assessment_dir_link <- function(directory_path, base_url = "https://ipbes-data.github.io/IPBES_Assessment_Directories") {
-  if (!nzchar(directory_path)) {
-    return("No published directory")
-  }
-
-  paste0(
-    "<a href='", base_url, "/", directory_path, "/index.html",
-    "' target='_blank' rel='noopener'>IPBES_Assessment_Directories/", directory_path, "/index.html</a>"
-  )
 }
 
 normalize_url <- function(url) {
@@ -322,89 +297,55 @@ load_tg_labels <- function(fallback_df, directory_url = "https://ipbes-data.gith
   list(data = empty_tg_labels(), source = "none")
 }
 
-pick_first_column <- function(df, candidates, fallback = "") {
-  hit <- candidates[candidates %in% names(df)]
-  if (length(hit) == 0) {
-    return(rep(fallback, nrow(df)))
+get_assessment_abbreviations <- function(assessments_df) {
+  if (is.null(assessments_df) || nrow(assessments_df) == 0 || !('abbreviation' %in% names(assessments_df))) {
+    return(character(0))
   }
 
-  out <- df[[hit[1]]]
-  if (is.null(out)) {
-    return(rep(fallback, nrow(df)))
-  }
-
-  out
+  unique(toupper(trimws(assessments_df$abbreviation)))
 }
 
-sanitize_shiny_apps <- function(df) {
-  if (is.null(df) || nrow(df) == 0) {
-    return(empty_shiny_apps())
+extract_ipbes_repo_token <- function(repo_name) {
+  if (is.na(repo_name) || !nzchar(repo_name)) {
+    return("")
   }
 
-  out <- data.frame(
-    name = pick_first_column(df, c("name", "application_name", "app_name")),
-    title = pick_first_column(df, c("title", "display_name", "name", "application_name")),
-    url = pick_first_column(df, c("url", "application_url", "app_url")),
-    status = pick_first_column(df, c("status", "application_status", "state")),
-    stringsAsFactors = FALSE
+  match <- regexec("^IPBES_([A-Za-z0-9]+)(?:_|$)", repo_name, perl = TRUE)
+  parsed <- regmatches(repo_name, match)[[1]]
+  if (length(parsed) < 2) {
+    return("")
+  }
+
+  toupper(parsed[2])
+}
+
+summarize_assessment_repositories <- function(repos_df, assessments_df, repo_name_col = "repo_name") {
+  if (is.null(repos_df) || nrow(repos_df) == 0 || !(repo_name_col %in% names(repos_df))) {
+    return(list(
+      n_assessments = 0L,
+      n_repositories = 0L,
+      data = repos_df[0, , drop = FALSE]
+    ))
+  }
+
+  assessment_abbrevs <- get_assessment_abbreviations(assessments_df)
+  if (length(assessment_abbrevs) == 0) {
+    return(list(
+      n_assessments = 0L,
+      n_repositories = 0L,
+      data = repos_df[0, , drop = FALSE]
+    ))
+  }
+
+  tokens <- vapply(repos_df[[repo_name_col]], extract_ipbes_repo_token, character(1))
+  is_assessment_repo <- tokens %in% assessment_abbrevs
+
+  matched <- repos_df[is_assessment_repo, , drop = FALSE]
+  matched$assessment_abbreviation <- tokens[is_assessment_repo]
+
+  list(
+    n_assessments = as.integer(length(unique(matched$assessment_abbreviation))),
+    n_repositories = as.integer(nrow(matched)),
+    data = matched
   )
-
-  out <- trim_char_columns(out)
-  out$title <- ifelse(is.na(out$title) | !nzchar(out$title), out$name, out$title)
-  out$status <- ifelse(is.na(out$status), "", out$status)
-
-  out <- out[!is.na(out$url) & nzchar(out$url), , drop = FALSE]
-  if (nrow(out) == 0) {
-    return(empty_shiny_apps())
-  }
-
-  out <- unique(out)
-  out[order(tolower(out$title), tolower(out$name)), , drop = FALSE]
-}
-
-get_shiny_apps_from_api <- function(account_name = Sys.getenv("SHINYAPPS_ACCOUNT", unset = "ipbes-data")) {
-  if (!requireNamespace("rsconnect", quietly = TRUE)) {
-    return(empty_shiny_apps())
-  }
-
-  token <- Sys.getenv("SHINYAPPS_TOKEN", unset = "")
-  secret <- Sys.getenv("SHINYAPPS_SECRET", unset = "")
-  if (!nzchar(token) || !nzchar(secret)) {
-    return(empty_shiny_apps())
-  }
-
-  connected <- tryCatch({
-    rsconnect::setAccountInfo(
-      name = account_name,
-      token = token,
-      secret = secret,
-      server = "shinyapps.io"
-    )
-    TRUE
-  }, error = function(e) FALSE)
-
-  if (!connected) {
-    return(empty_shiny_apps())
-  }
-
-  apps_raw <- tryCatch(
-    rsconnect::applications(account = account_name, server = "shinyapps.io"),
-    error = function(e) NULL
-  )
-
-  sanitize_shiny_apps(apps_raw)
-}
-
-load_shiny_apps <- function(fallback_df, account_name = Sys.getenv("SHINYAPPS_ACCOUNT", unset = "ipbes-data")) {
-  live <- get_shiny_apps_from_api(account_name = account_name)
-  if (nrow(live) > 0) {
-    return(list(data = live, source = "shinyapps api"))
-  }
-
-  fallback <- sanitize_shiny_apps(fallback_df)
-  if (nrow(fallback) > 0) {
-    return(list(data = fallback, source = "fallback csv"))
-  }
-
-  list(data = empty_shiny_apps(), source = "none")
 }

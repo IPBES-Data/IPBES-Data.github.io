@@ -1,8 +1,6 @@
 project:
   type: website
   output-dir: _site
-  pre-render:
-    - Rscript scripts/sync_version_from_news.R
   post-render:
     - Rscript scripts/inject_footer_version.R
   render:
@@ -20,11 +18,9 @@ website:
         text: Home
       - about.qmd
       - repos.qmd
-      - news.qmd
-      - contributors.qmd
   page-footer:
     left: "[News](news.qmd) | [Contributors](contributors.qmd)"
-    right: "Website version: SITE_VERSION_TOKEN"
+    right: "Website version: SITE_VERSION_TOKEN | Data fetched: DATA_FETCHED_TOKEN UTC"
 
 format:
   html:
