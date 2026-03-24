@@ -2,8 +2,7 @@
 title: "Repository List"
 format:
   html:
-    toc: true
-    toc-depth: 2
+    toc: false
     page-layout: full
 execute:
   echo: false
@@ -27,6 +26,15 @@ tg_labels_fallback <- inputs$tg_labels_fallback
 repo_result <- get_org_repos_for_repos(org = "IPBES-Data")
 repos <- repo_result$data
 repo_source <- repo_result$source
+repo_refreshed_at <- ""
+if (identical(repo_source, "live GitHub API")) {
+  repo_refreshed_at <- format(Sys.time(), "%Y-%m-%d %H:%M UTC", tz = "UTC")
+} else if (file.exists("tree.rds")) {
+  tree_mtime <- file.info("tree.rds")$mtime[1]
+  if (!is.na(tree_mtime)) {
+    repo_refreshed_at <- format(as.POSIXct(tree_mtime, tz = "UTC"), "%Y-%m-%d %H:%M UTC", tz = "UTC")
+  }
+}
 doi_map <- get_repo_doi_map(repos)
 pcc_repo_map <- get_repo_pcc_map(repos)
 
@@ -65,18 +73,26 @@ lookup_repo_doi <- function(repo_name, doi_df) {
 }
 
 build_properties_html <- function(archived_value, visibility_value) {
+  prop_tokens <- character(0)
   archived_icon <- if (!is.na(archived_value) && archived_value %in% "Yes") {
+    prop_tokens <- c(prop_tokens, "Archived")
     "<img class='prop-status-icon' src='assets/icons/archived_icon.svg' alt='Archived'/>"
   } else "&nbsp;"
+  visibility_title <- "Visibility"
   visibility_icon <- if (!is.na(visibility_value) && tolower(visibility_value) == "private") {
+    prop_tokens <- c(prop_tokens, "Private")
+    visibility_title <- "Private"
     "<img class='prop-status-icon' src='assets/icons/private_icon.svg' alt='Private'/>"
   } else if (!is.na(visibility_value) && nzchar(visibility_value)) {
+    prop_tokens <- c(prop_tokens, "Public")
+    visibility_title <- "Public"
     "<img class='prop-status-icon' src='assets/icons/public_icon.svg' alt='Public'/>"
   } else "&nbsp;"
 
   paste0(
     "<span class='prop-slot' title='Archived'>", archived_icon, "</span>",
-    "<span class='prop-slot' title='Visibility'>", visibility_icon, "</span>"
+    "<span class='prop-slot' title='", visibility_title, "'>", visibility_icon, "</span>",
+    "<span class='filter-token'>", paste(prop_tokens, collapse = " "), "</span>"
   )
 }
 
@@ -95,7 +111,7 @@ build_properties_key <- function(archived_value, visibility_value) {
 
 build_license_html <- function(spdx_id, license_url) {
   if (is.na(spdx_id) || !nzchar(spdx_id) || toupper(spdx_id) %in% c("NOASSERTION", "NONE")) {
-    return("")
+    return("<span class='filter-token'>No License</span>")
   }
   safe_id <- gsub("-", "--", spdx_id, fixed = TRUE)
   safe_id <- gsub("_", "__", safe_id, fixed = TRUE)
@@ -105,7 +121,8 @@ build_license_html <- function(spdx_id, license_url) {
   paste0(
     "<a href='", target_url, "' target='_blank' rel='noopener' title='", spdx_id, "'>",
     "<img class='license-badge' src='", badge_url, "' alt='", spdx_id, " license'/>",
-    "</a>"
+    "</a>",
+    "<span class='filter-token'>", spdx_id, "</span>"
   )
 }
 
@@ -114,8 +131,10 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
   github_link <- ""
   pcc_link <- ""
   doi_link <- ""
+  pub_tokens <- character(0)
 
   if (!is.na(repo_url) && nzchar(repo_url)) {
+    pub_tokens <- c(pub_tokens, "GH")
     repo_link <- paste0(
       "<a class='pub-link page-repo' href='", repo_url, "' target='_blank' rel='noopener' title='Open GitHub repository'>",
       "<img class='prop-status-icon' src='assets/icons/repository_gh_icon.svg' alt='GitHub repository'/>",
@@ -124,6 +143,7 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
   }
 
   if (!is.na(has_pages) && isTRUE(has_pages)) {
+    pub_tokens <- c(pub_tokens, "GHP")
     gh_url <- infer_github_pages_url(repo_name, homepage = homepage, org = "IPBES-Data")
     github_link <- paste0(
       "<a class='pub-link page-ghp' href='", gh_url, "' target='_blank' rel='noopener' title='Published on GitHub Pages'>",
@@ -133,6 +153,7 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
   }
 
   if (!is.na(pcc_url) && nzchar(pcc_url)) {
+    pub_tokens <- c(pub_tokens, "PCC")
     pcc_link <- paste0(
       "<a class='pub-link page-pcc' href='", pcc_url, "' target='_blank' rel='noopener' title='Published on Posit Connect Cloud'>",
       "<img class='prop-status-icon' src='assets/icons/published_pcc_icon.svg' alt='Published on Posit Connect Cloud'/>",
@@ -143,6 +164,7 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
     if (length(hit) > 0) {
       pcc_url_map <- pcc_map_df$pcc_url[hit[1]]
       if (!is.na(pcc_url_map) && nzchar(pcc_url_map)) {
+        pub_tokens <- c(pub_tokens, "PCC")
         pcc_link <- paste0(
           "<a class='pub-link page-pcc' href='", pcc_url_map, "' target='_blank' rel='noopener' title='Published on Posit Connect Cloud'>",
           "<img class='prop-status-icon' src='assets/icons/published_pcc_icon.svg' alt='Published on Posit Connect Cloud'/>",
@@ -153,6 +175,7 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
   }
 
   if (!is.na(doi_value) && nzchar(doi_value)) {
+    pub_tokens <- c(pub_tokens, "DOI")
     doi_link <- paste0(
       "<a class='pub-link page-doi' href='", doi_value, "' target='_blank' rel='noopener' title='Published DOI'>",
       "<img class='doi-logo-icon' src='assets/icons/doi_icon.svg' alt='Published DOI'/>",
@@ -173,7 +196,8 @@ build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_
     "<span class='pub-slot' title='GitHub repository'>", slot(repo_link), "</span>",
     "<span class='pub-slot' title='Published on GitHub Pages'>", slot(github_link), "</span>",
     "<span class='pub-slot' title='Published on Posit Connect Cloud'>", slot(pcc_link), "</span>",
-    "</div>"
+    "</div>",
+    "<span class='filter-token'>", paste(unique(pub_tokens), collapse = " "), "</span>"
   )
 }
 
@@ -392,15 +416,6 @@ var $ths = $container.find('thead th');\
 $ths.eq(pageCol).css('white-space', 'nowrap');\
 $ths.eq(propertiesCol).attr('title', 'Properties:\\n1. Archived\\n2. Visibility').css('white-space', 'nowrap');\
 var $filterCells = $container.find('thead tr:eq(1) th');\
-if ($filterCells.length > 3) {\
-  $filterCells.eq(3).html('');\
-}\
-if ($filterCells.length > pageCol) {\
-  $filterCells.eq(pageCol).html('');\
-}\
-if ($filterCells.length > propertiesCol) {\
-  $filterCells.eq(propertiesCol).html('');\
-}\
 \
 function applyScopes(catScope, pubScope) {\
   table.column(categoryCol).search('', true, false);\
@@ -474,7 +489,15 @@ applyScopes(initialScopes.cat, initialScopes.pub);\
     htmltools::browsable(htmltools::tagList(
       controls,
       tbl,
-      htmltools::tags$div(style = "margin-top:0.5rem;color:#2f3f2a;", paste0("Repository source: ", repo_source, "."))
+      htmltools::tags$div(
+        style = "margin-top:0.5rem;color:#2f3f2a;",
+        paste0(
+          "Repository source: ",
+          repo_source,
+          if (nzchar(repo_refreshed_at)) paste0(" (refreshed: ", repo_refreshed_at, ")") else "",
+          "."
+        )
+      )
     ))
   }
 }

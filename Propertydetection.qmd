@@ -1,0 +1,107 @@
+---
+title: "Property Detection"
+format:
+  html:
+    toc: false
+---
+
+# Repository Property Detection
+
+This page documents how repository properties are inferred automatically from each repository `README.md`.
+
+## Scope
+
+The current README-based heuristics detect:
+
+1. DOI publication links
+2. Posit Connect Cloud (PCC) publication links
+
+Both are discovered without modifying repository content.
+
+## README Badge Pattern
+
+The parser searches badge links in standard markdown form:
+
+`[![...](IMAGE_URL)](TARGET_URL)`
+
+All matching badge links are scanned, then filtered by the rules below.
+
+## DOI Heuristic
+
+A DOI is detected only when a Zenodo badge and DOI target are both present:
+
+1. `IMAGE_URL` contains `zenodo.org/badge`
+2. `TARGET_URL` contains `doi.org/`
+
+The DOI is then normalized to canonical format:
+
+- remove leading `https://doi.org/`
+- remove trailing `.svg` if present
+- remove trailing punctuation
+- validate pattern `10.<prefix>/<suffix>`
+
+The website stores this as `doi` and `doi_url`.
+
+## PCC Heuristic
+
+A Posit Connect Cloud URL is detected when a shield badge indicates Connect Cloud app publishing:
+
+1. `IMAGE_URL` contains `img.shields.io/badge/`
+2. `IMAGE_URL` contains both:
+   - `Connect Cloud`
+   - `Open App`
+3. `TARGET_URL` starts with `http://` or `https://`
+
+The `TARGET_URL` is stored as the repository PCC URL.
+
+## Caching
+
+Detection results are cached to reduce API requests:
+
+- DOI cache: `input/cache/repo_doi_map.csv`
+- PCC cache: `input/cache/repo_pcc_map.csv`
+
+TTL:
+
+- positive hits: 24 hours
+- negative hits: 1 hour
+
+## Data Flow
+
+Detected properties are used in:
+
+- landing-page metrics (`Have DOIs`, `Published on PCC`)
+- repository table publication icons and scope filters
+
+## Detection Source Fields
+
+Caches include source columns for traceability:
+
+- DOI cache: `doi_source`
+- PCC cache: `pcc_source`
+
+Current values:
+
+- DOI: `readme_zenodo_badge` or `none`
+- PCC: `readme_connect_badge` or `none`
+
+## Data Freshness
+
+The website data is refreshed by scheduled GitHub Actions deploys every 6 hours, and the README detection caches use shorter TTL for misses (`1h`) and longer TTL for hits (`24h`).
+
+Practical effect:
+
+- newly added repositories usually appear after the next scheduled deploy,
+- new DOI/PCC badges are picked up automatically once cache refresh conditions are met.
+
+## Current Limits
+
+- Heuristics rely on badge conventions in `README.md`.
+- Non-standard badge formats may not be detected.
+- If GitHub API access fails temporarily, detection may lag until cache refresh.
+
+## Validation
+
+Heuristic parsing is checked with a lightweight script:
+
+- `scripts/validate_property_detection.R`

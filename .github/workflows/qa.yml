@@ -1,15 +1,14 @@
-name: Render and Deploy Website
+name: QA
 
 on:
-  schedule:
-    - cron: "0 */6 * * *"
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-deploy:
+  render-and-check:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,13 +25,13 @@ jobs:
         run: |
           Rscript -e 'install.packages(c("gh", "knitr", "data.tree", "rvest", "DT", "jsonlite"), repos = "https://cloud.r-project.org")'
 
+      - name: Validate property detection heuristics
+        run: Rscript scripts/validate_property_detection.R
+
       - name: Render website
         run: quarto render
 
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _site
-          publish_branch: gh-pages
-          force_orphan: true
+          args: --offline --no-progress _site/**/*.html

@@ -32,15 +32,12 @@ filter_required_nonempty <- function(df, required_cols) {
 
 load_site_inputs <- function(input_dir = "input") {
   assessments <- read_trimmed_csv(file.path(input_dir, "assessments.csv"))
-  dir_map <- read_trimmed_csv(file.path(input_dir, "assessment_directory_map.csv"))
   tg_labels_fallback <- read_trimmed_csv(file.path(input_dir, "technical_guideline_labels.csv"))
 
-  dir_map <- filter_required_nonempty(dir_map, c("abbreviation", "directory_path"))
   tg_labels_fallback <- filter_required_nonempty(tg_labels_fallback, c("repo_name", "title", "page_url"))
 
   list(
     assessments = assessments,
-    dir_map = dir_map,
     tg_labels_fallback = tg_labels_fallback
   )
 }
@@ -82,15 +79,29 @@ extract_markdown_badge_links <- function(text) {
     return(data.frame(image_url = character(0), target_url = character(0), stringsAsFactors = FALSE))
   }
 
-  pattern <- "\\[!\\[[^\\]]*\\]\\(([^)]+)\\)\\]\\s*\\(([^)]+)\\)"
-  m <- gregexec(pattern, text, perl = TRUE)
-  hits <- regmatches(text, m)[[1]]
-  if (length(hits) == 0) {
+  full_pattern <- "\\[!\\[[^\\]]*\\]\\([^)]*\\)\\]\\s*\\([^)]*\\)"
+  full_matches <- regmatches(text, gregexpr(full_pattern, text, perl = TRUE))[[1]]
+  if (length(full_matches) == 0 || (length(full_matches) == 1 && is.na(full_matches[1]))) {
     return(data.frame(image_url = character(0), target_url = character(0), stringsAsFactors = FALSE))
   }
 
-  image_urls <- vapply(hits, function(x) if (length(x) >= 2) x[2] else "", character(1))
-  target_urls <- vapply(hits, function(x) if (length(x) >= 3) x[3] else "", character(1))
+  cap_pattern <- "^\\[!\\[[^\\]]*\\]\\(([^)]+)\\)\\]\\s*\\(([^)]+)\\)$"
+  image_urls <- vapply(
+    full_matches,
+    function(h) {
+      p <- regmatches(h, regexec(cap_pattern, h, perl = TRUE))[[1]]
+      if (length(p) >= 2) p[2] else ""
+    },
+    character(1)
+  )
+  target_urls <- vapply(
+    full_matches,
+    function(h) {
+      p <- regmatches(h, regexec(cap_pattern, h, perl = TRUE))[[1]]
+      if (length(p) >= 3) p[3] else ""
+    },
+    character(1)
+  )
 
   out <- data.frame(
     image_url = trimws(image_urls),
@@ -366,64 +377,13 @@ infer_github_pages_url <- function(repo_name, homepage = "", org = "IPBES-Data")
   paste0("https://", tolower(org), ".github.io/", repo_name, "/")
 }
 
-get_github_pages_repositories <- function(repos_df, org = "IPBES-Data") {
-  if (is.null(repos_df) || nrow(repos_df) == 0 || !("repo_name" %in% names(repos_df))) {
-    return(data.frame(
-      repo_name = character(0),
-      pages_url = character(0),
-      description = character(0),
-      archived = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  if (!("has_pages" %in% names(repos_df))) {
-    return(data.frame(
-      repo_name = character(0),
-      pages_url = character(0),
-      description = character(0),
-      archived = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  has_pages <- !is.na(repos_df$has_pages) & repos_df$has_pages
-  pages <- repos_df[has_pages, , drop = FALSE]
-  if (nrow(pages) == 0) {
-    return(data.frame(
-      repo_name = character(0),
-      pages_url = character(0),
-      description = character(0),
-      archived = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  homepage <- if ("homepage" %in% names(pages)) pages$homepage else rep("", nrow(pages))
-  description <- if ("description" %in% names(pages)) pages$description else rep("", nrow(pages))
-  archived <- if ("archived" %in% names(pages)) pages$archived else rep(NA, nrow(pages))
-
-  out <- data.frame(
-    repo_name = pages$repo_name,
-    pages_url = vapply(
-      seq_len(nrow(pages)),
-      function(i) infer_github_pages_url(pages$repo_name[i], homepage[i], org = org),
-      character(1)
-    ),
-    description = ifelse(is.na(description), "", description),
-    archived = ifelse(is.na(archived), "Unknown", ifelse(archived, "Yes", "No")),
-    stringsAsFactors = FALSE
-  )
-
-  out[order(tolower(out$repo_name)), , drop = FALSE]
-}
-
 empty_repo_doi_map <- function() {
   data.frame(
     repo_name = character(0),
     repo_id = integer(0),
     doi = character(0),
     doi_url = character(0),
+    doi_source = character(0),
     checked_at = character(0),
     stringsAsFactors = FALSE
   )
@@ -566,16 +526,15 @@ fetch_github_file_text <- function(repo_name, path, org = "IPBES-Data") {
 fetch_repo_doi_from_github <- function(repo_name, org = "IPBES-Data") {
   readme <- fetch_github_file_text(repo_name = repo_name, path = "README.md", org = org)
   doi <- extract_doi_from_zenodo_badge_readme(readme)
-  if (nzchar(doi)) {
-    return(doi)
-  }
-
-  ""
+  source <- ifelse(nzchar(doi), "readme_zenodo_badge", "none")
+  list(doi = doi, doi_source = source)
 }
 
 fetch_repo_pcc_from_github <- function(repo_name, org = "IPBES-Data") {
   readme <- fetch_github_file_text(repo_name = repo_name, path = "README.md", org = org)
-  extract_connect_cloud_url_from_readme(readme)
+  pcc_url <- extract_connect_cloud_url_from_readme(readme)
+  source <- ifelse(nzchar(pcc_url), "readme_connect_badge", "none")
+  list(pcc_url = pcc_url, pcc_source = source)
 }
 
 get_repo_doi_map <- function(repos_df, cache_path = "input/cache/repo_doi_map.csv", stale_hours = 24) {
@@ -592,7 +551,7 @@ get_repo_doi_map <- function(repos_df, cache_path = "input/cache/repo_doi_map.cs
   cache <- empty_repo_doi_map()
   if (file.exists(cache_path)) {
     cache <- tryCatch(read_trimmed_csv(cache_path), error = function(e) empty_repo_doi_map())
-    needed <- c("repo_name", "repo_id", "doi", "doi_url", "checked_at")
+    needed <- c("repo_name", "repo_id", "doi", "doi_url", "doi_source", "checked_at")
     for (col in needed) {
       if (!(col %in% names(cache))) {
         cache[[col]] <- ""
@@ -602,6 +561,9 @@ get_repo_doi_map <- function(repos_df, cache_path = "input/cache/repo_doi_map.cs
     cache$repo_id <- suppressWarnings(as.integer(cache$repo_id))
     cache$doi <- vapply(cache$doi, normalize_doi, character(1))
     cache$doi_url <- ifelse(nzchar(cache$doi), paste0("https://doi.org/", cache$doi), "")
+    cache$doi_source <- ifelse(is.na(cache$doi_source), "", trimws(cache$doi_source))
+    cache$doi_source <- ifelse(!nzchar(cache$doi_source) & nzchar(cache$doi), "legacy_cache", cache$doi_source)
+    cache$doi_source <- ifelse(!nzchar(cache$doi_source), "none", cache$doi_source)
     cache$checked_at <- ifelse(is.na(cache$checked_at), "", cache$checked_at)
   }
 
@@ -627,22 +589,24 @@ get_repo_doi_map <- function(repos_df, cache_path = "input/cache/repo_doi_map.cs
     }
 
     if (use_cached) {
-      row <- cache[cached_idx[1], c("repo_name", "repo_id", "doi", "doi_url", "checked_at"), drop = FALSE]
+      row <- cache[cached_idx[1], c("repo_name", "repo_id", "doi", "doi_url", "doi_source", "checked_at"), drop = FALSE]
       row$doi <- normalize_doi(row$doi[1])
       row$doi_url <- ifelse(nzchar(row$doi[1]), paste0("https://doi.org/", row$doi[1]), "")
       out[[i]] <- row
       next
     }
 
-    doi <- fetch_repo_doi_from_github(repo_name = repo_name, org = "IPBES-Data")
-    doi <- normalize_doi(doi)
+    detected <- fetch_repo_doi_from_github(repo_name = repo_name, org = "IPBES-Data")
+    doi <- normalize_doi(detected$doi)
     doi_url <- if (nzchar(doi)) paste0("https://doi.org/", doi) else ""
+    doi_source <- ifelse(nzchar(doi), detected$doi_source, "none")
 
     out[[i]] <- data.frame(
       repo_name = repo_name,
       repo_id = repo_id,
       doi = doi,
       doi_url = doi_url,
+      doi_source = doi_source,
       checked_at = format(now_utc, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
       stringsAsFactors = FALSE
     )
@@ -668,6 +632,7 @@ empty_repo_pcc_map <- function() {
     repo_name = character(0),
     repo_id = integer(0),
     pcc_url = character(0),
+    pcc_source = character(0),
     checked_at = character(0),
     stringsAsFactors = FALSE
   )
@@ -687,7 +652,7 @@ get_repo_pcc_map <- function(repos_df, cache_path = "input/cache/repo_pcc_map.cs
   cache <- empty_repo_pcc_map()
   if (file.exists(cache_path)) {
     cache <- tryCatch(read_trimmed_csv(cache_path), error = function(e) empty_repo_pcc_map())
-    needed <- c("repo_name", "repo_id", "pcc_url", "checked_at")
+    needed <- c("repo_name", "repo_id", "pcc_url", "pcc_source", "checked_at")
     for (col in needed) {
       if (!(col %in% names(cache))) {
         cache[[col]] <- ""
@@ -696,6 +661,9 @@ get_repo_pcc_map <- function(repos_df, cache_path = "input/cache/repo_pcc_map.cs
     cache <- cache[, needed, drop = FALSE]
     cache$repo_id <- suppressWarnings(as.integer(cache$repo_id))
     cache$pcc_url <- ifelse(is.na(cache$pcc_url), "", trimws(cache$pcc_url))
+    cache$pcc_source <- ifelse(is.na(cache$pcc_source), "", trimws(cache$pcc_source))
+    cache$pcc_source <- ifelse(!nzchar(cache$pcc_source) & nzchar(cache$pcc_url), "legacy_cache", cache$pcc_source)
+    cache$pcc_source <- ifelse(!nzchar(cache$pcc_source), "none", cache$pcc_source)
     cache$checked_at <- ifelse(is.na(cache$checked_at), "", cache$checked_at)
   }
 
@@ -721,16 +689,22 @@ get_repo_pcc_map <- function(repos_df, cache_path = "input/cache/repo_pcc_map.cs
     }
 
     pcc_url <- ""
+    pcc_source <- ""
     if (use_cached) {
       pcc_url <- cache$pcc_url[cached_idx[1]]
+      pcc_source <- cache$pcc_source[cached_idx[1]]
     } else {
-      pcc_url <- fetch_repo_pcc_from_github(repo_name = repo_name, org = "IPBES-Data")
+      detected <- fetch_repo_pcc_from_github(repo_name = repo_name, org = "IPBES-Data")
+      pcc_url <- detected$pcc_url
+      pcc_source <- detected$pcc_source
     }
+    pcc_source <- ifelse(nzchar(trimws(pcc_url)), pcc_source, "none")
 
     out[[i]] <- data.frame(
       repo_name = repo_name,
       repo_id = repo_id,
       pcc_url = ifelse(is.na(pcc_url), "", trimws(pcc_url)),
+      pcc_source = pcc_source,
       checked_at = format(now_utc, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
       stringsAsFactors = FALSE
     )
@@ -748,7 +722,7 @@ get_repo_pcc_map <- function(repos_df, cache_path = "input/cache/repo_pcc_map.cs
     error = function(e) NULL
   )
 
-  pcc_map[pcc_map$pcc_url != "", c("repo_name", "pcc_url"), drop = FALSE]
+  pcc_map[pcc_map$pcc_url != "", c("repo_name", "pcc_url", "pcc_source"), drop = FALSE]
 }
 
 get_assessment_abbreviations <- function(assessments_df) {

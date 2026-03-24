@@ -246,17 +246,15 @@ h2 {
   font-size: 0.88rem;
 }
 
-#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(4) .form-group,
-#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(5) .form-group,
-#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(6) .form-group {
-  display: none !important;
-}
-
 #repo-unified-table .prop-slot {
   display: inline-block;
   width: 2.25em;
   text-align: center;
   line-height: 1.1;
+}
+
+#repo-unified-table .filter-token {
+  display: none;
 }
 
 #repo-unified-table td:nth-child(4) {

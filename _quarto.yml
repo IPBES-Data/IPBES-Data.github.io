@@ -8,6 +8,7 @@ project:
   render:
     - index.qmd
     - about.qmd
+    - Propertydetection.qmd
     - repos.qmd
     - news.qmd
     - contributors.qmd
@@ -18,7 +19,10 @@ website:
     left:
       - href: index.qmd
         text: Home
-      - about.qmd
+      - text: About
+        menu:
+          - about.qmd
+          - Propertydetection.qmd
       - repos.qmd
   page-footer:
     left: "[News](news.qmd) | [Contributors](contributors.qmd)"

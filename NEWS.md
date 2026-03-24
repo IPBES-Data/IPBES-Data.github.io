@@ -1,5 +1,37 @@
 # NEWS
 
+## 2026-03-24
+
+### Automation
+- Changed scheduled deployment cadence from every 3 hours to every 6 hours (`0 */6 * * *` UTC).
+- Added QA workflow `.github/workflows/qa.yml`:
+  - runs on pull requests,
+  - validates README property heuristics,
+  - renders the site,
+  - checks internal links in `_site/**/*.html` (offline mode).
+
+### Property Detection Hardening
+- Added source tracking fields in cache outputs:
+  - `doi_source` in `input/cache/repo_doi_map.csv`,
+  - `pcc_source` in `input/cache/repo_pcc_map.csv`.
+- Added parser validation script `scripts/validate_property_detection.R` with positive/negative fixture checks for DOI and PCC badges.
+- Expanded property detection documentation in `Propertydetection.qmd` with source fields, freshness behavior, and validation reference.
+
+### Repository Cleanup
+- Removed obsolete DOI algorithm markdown file and replaced it with a rendered website page: `Propertydetection.qmd`.
+- Added `Propertydetection.qmd` to the website render pipeline and About navigation menu.
+- Removed unused helper code from `scripts/site_data_utils.R`.
+- Removed the repository-page "On this page" TOC panel by disabling page TOC for `repos.qmd`.
+
+### Property Detection
+- Finalized README-based heuristics for repository property discovery:
+  - DOI detection from Zenodo DOI badge links in `README.md`.
+  - Posit Connect Cloud detection from Connect Cloud "Open App" shield badge links in `README.md`.
+- Removed dependency on `input/connect_cloud_apps.csv` from the live site data pipeline.
+
+### Documentation
+- Updated `README.md` with build and property-detection notes aligned with current implementation.
+
 ## 2026-03-17
 
 ### Versioning
