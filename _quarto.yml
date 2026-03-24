@@ -1,6 +1,8 @@
 project:
   type: website
   output-dir: _site
+  resources:
+    - assets/icons/**
   post-render:
     - Rscript scripts/inject_footer_version.R
   render:

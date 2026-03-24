@@ -4,6 +4,7 @@ format:
   html:
     toc: true
     toc-depth: 2
+    page-layout: full
 execute:
   echo: false
   warning: false
@@ -11,6 +12,8 @@ execute:
 ---
 
 This document lists repositories in the [IPBES-Data GitHub organization](https://github.com/IPBES-Data).
+
+## Repository Explorer {#repository-explorer}
 
 ```{r}
 source("scripts/site_data_utils.R")
@@ -24,10 +27,11 @@ tg_labels_fallback <- inputs$tg_labels_fallback
 repo_result <- get_org_repos_for_repos(org = "IPBES-Data")
 repos <- repo_result$data
 repo_source <- repo_result$source
+doi_map <- get_repo_doi_map(repos)
+pcc_repo_map <- get_repo_pcc_map(repos)
 
 tg_result <- load_tg_labels(tg_labels_fallback, directory_url = tg_directory_page)
 tg_pages <- tg_result$data
-tg_source <- tg_result$source
 
 if (nrow(repos) > 0 && nrow(tg_pages) > 0) {
   tg_repo_names <- repos$repo_name[grepl("^IPBES_TG_", repos$repo_name)]
@@ -47,128 +51,431 @@ assessment_lookup <- unique(data.frame(
 format_archived <- function(x) {
   ifelse(is.na(x), "Unknown", ifelse(x, "Yes", "No"))
 }
-```
 
-## Assessment-Related Repositories
+lookup_repo_doi <- function(repo_name, doi_df) {
+  if (is.null(doi_df) || nrow(doi_df) == 0 || is.na(repo_name) || !nzchar(repo_name)) {
+    return("")
+  }
+  hit <- which(doi_df$repo_name == repo_name)
+  if (length(hit) == 0) {
+    return("")
+  }
+  doi_url <- doi_df$doi_url[hit[1]]
+  ifelse(is.na(doi_url), "", doi_url)
+}
 
-Repository source for dynamic lists: `r repo_source`.
+build_properties_html <- function(archived_value, visibility_value) {
+  archived_icon <- if (!is.na(archived_value) && archived_value %in% "Yes") {
+    "<img class='prop-status-icon' src='assets/icons/archived_icon.svg' alt='Archived'/>"
+  } else "&nbsp;"
+  visibility_icon <- if (!is.na(visibility_value) && tolower(visibility_value) == "private") {
+    "<img class='prop-status-icon' src='assets/icons/private_icon.svg' alt='Private'/>"
+  } else if (!is.na(visibility_value) && nzchar(visibility_value)) {
+    "<img class='prop-status-icon' src='assets/icons/public_icon.svg' alt='Public'/>"
+  } else "&nbsp;"
 
-```{r}
-if (nrow(assessment_repos) == 0) {
-  cat("No assessment-related repositories found.")
-} else {
-  assessment_repos$assessment_abbreviation <- toupper(assessment_repos$assessment_abbreviation)
-  assessment_repos <- merge(
-    assessment_repos,
-    assessment_lookup,
-    by = "assessment_abbreviation",
-    all.x = TRUE,
-    sort = FALSE
-  )
-
-  assessment_repos$Assessment <- ifelse(
-    is.na(assessment_repos$Assessment) | !nzchar(assessment_repos$Assessment),
-    assessment_repos$assessment_abbreviation,
-    assessment_repos$Assessment
-  )
-
-  assessment_order <- match(assessment_repos$assessment_abbreviation, assessment_lookup$assessment_abbreviation)
-  assessment_repos <- assessment_repos[order(assessment_order, tolower(assessment_repos$repo_name)), , drop = FALSE]
-
-  assessment_repos$Repository <- paste0(
-    "<a href='", assessment_repos$url, "' target='_blank' rel='noopener'>", assessment_repos$repo_name, "</a>"
-  )
-  assessment_repos$Archived <- format_archived(assessment_repos$archived)
-
-  out <- assessment_repos[, c("Assessment", "Repository", "description", "Archived")]
-  names(out) <- c("Assessment", "Repository", "Description", "Archived")
-
-  DT::datatable(
-    out,
-    escape = FALSE,
-    rownames = FALSE,
-    filter = "top",
-    options = list(
-      pageLength = 25,
-      autoWidth = TRUE
-    )
+  paste0(
+    "<span class='prop-slot' title='Archived'>", archived_icon, "</span>",
+    "<span class='prop-slot' title='Visibility'>", visibility_icon, "</span>"
   )
 }
-```
 
-## Technical Guidelines
+build_properties_key <- function(archived_value, visibility_value) {
+  parts <- character(0)
+  if (!is.na(archived_value) && archived_value %in% "Yes") {
+    parts <- c(parts, "Archived")
+  }
+  if (!is.na(visibility_value) && tolower(visibility_value) == "private") {
+    parts <- c(parts, "Private")
+  } else if (!is.na(visibility_value) && nzchar(visibility_value)) {
+    parts <- c(parts, "Public")
+  }
+  paste(parts, collapse = " ")
+}
 
-Names are taken from the published TG Directory page (source: `r tg_source`).
-
-```{r}
-if (nrow(tg_pages) == 0) {
-  cat("No technical guideline pages found.")
-} else {
-  tg_meta <- repos[repos$repo_name %in% tg_pages$repo_name, c("repo_name", "url", "description", "archived"), drop = FALSE]
-  tg_table <- merge(tg_pages, tg_meta, by = "repo_name", all.x = TRUE, sort = FALSE)
-
-  tg_table$Name <- paste0(
-    "<a href='", tg_table$page_url, "' target='_blank' rel='noopener'>", tg_table$title, "</a>"
-  )
-  tg_table$Repository <- ifelse(
-    !is.na(tg_table$url) & nzchar(tg_table$url),
-    paste0("<a href='", tg_table$url, "' target='_blank' rel='noopener'>", tg_table$repo_name, "</a>"),
-    tg_table$repo_name
-  )
-  tg_table$Description <- ifelse(is.na(tg_table$description), "", tg_table$description)
-  tg_table$Archived <- format_archived(tg_table$archived)
-
-  out <- tg_table[, c("Name", "Repository", "Description", "Archived")]
-
-  DT::datatable(
-    out,
-    escape = FALSE,
-    rownames = FALSE,
-    filter = "top",
-    options = list(
-      pageLength = 25,
-      autoWidth = TRUE
-    )
+build_license_html <- function(spdx_id, license_url) {
+  if (is.na(spdx_id) || !nzchar(spdx_id) || toupper(spdx_id) %in% c("NOASSERTION", "NONE")) {
+    return("")
+  }
+  safe_id <- gsub("-", "--", spdx_id, fixed = TRUE)
+  safe_id <- gsub("_", "__", safe_id, fixed = TRUE)
+  safe_id <- gsub(" ", "%20", safe_id, fixed = TRUE)
+  badge_url <- paste0("https://img.shields.io/badge/", safe_id, "-2f5f2f?style=flat-square")
+  target_url <- ifelse(is.na(license_url) || !nzchar(license_url), paste0("https://spdx.org/licenses/", spdx_id, ".html"), license_url)
+  paste0(
+    "<a href='", target_url, "' target='_blank' rel='noopener' title='", spdx_id, "'>",
+    "<img class='license-badge' src='", badge_url, "' alt='", spdx_id, " license'/>",
+    "</a>"
   )
 }
-```
 
-## Other Repositories
+build_published_links <- function(repo_url, repo_name, has_pages, homepage, pcc_map_df, doi_value = "", pcc_url = "") {
+  repo_link <- ""
+  github_link <- ""
+  pcc_link <- ""
+  doi_link <- ""
 
-```{r}
+  if (!is.na(repo_url) && nzchar(repo_url)) {
+    repo_link <- paste0(
+      "<a class='pub-link page-repo' href='", repo_url, "' target='_blank' rel='noopener' title='Open GitHub repository'>",
+      "<img class='prop-status-icon' src='assets/icons/repository_gh_icon.svg' alt='GitHub repository'/>",
+      "</a>"
+    )
+  }
+
+  if (!is.na(has_pages) && isTRUE(has_pages)) {
+    gh_url <- infer_github_pages_url(repo_name, homepage = homepage, org = "IPBES-Data")
+    github_link <- paste0(
+      "<a class='pub-link page-ghp' href='", gh_url, "' target='_blank' rel='noopener' title='Published on GitHub Pages'>",
+      "<img class='prop-status-icon' src='assets/icons/published_ghp_icon.svg' alt='Published on GitHub Pages'/>",
+      "</a>"
+    )
+  }
+
+  if (!is.na(pcc_url) && nzchar(pcc_url)) {
+    pcc_link <- paste0(
+      "<a class='pub-link page-pcc' href='", pcc_url, "' target='_blank' rel='noopener' title='Published on Posit Connect Cloud'>",
+      "<img class='prop-status-icon' src='assets/icons/published_pcc_icon.svg' alt='Published on Posit Connect Cloud'/>",
+      "</a>"
+    )
+  } else if (!is.null(pcc_map_df) && nrow(pcc_map_df) > 0) {
+    hit <- which(pcc_map_df$repo_name == repo_name)
+    if (length(hit) > 0) {
+      pcc_url_map <- pcc_map_df$pcc_url[hit[1]]
+      if (!is.na(pcc_url_map) && nzchar(pcc_url_map)) {
+        pcc_link <- paste0(
+          "<a class='pub-link page-pcc' href='", pcc_url_map, "' target='_blank' rel='noopener' title='Published on Posit Connect Cloud'>",
+          "<img class='prop-status-icon' src='assets/icons/published_pcc_icon.svg' alt='Published on Posit Connect Cloud'/>",
+          "</a>"
+        )
+      }
+    }
+  }
+
+  if (!is.na(doi_value) && nzchar(doi_value)) {
+    doi_link <- paste0(
+      "<a class='pub-link page-doi' href='", doi_value, "' target='_blank' rel='noopener' title='Published DOI'>",
+      "<img class='doi-logo-icon' src='assets/icons/doi_icon.svg' alt='Published DOI'/>",
+      "</a>"
+    )
+  }
+
+  slot <- function(link_html) {
+    if (!is.na(link_html) && nzchar(link_html)) {
+      return(link_html)
+    }
+    "<span class='pub-empty' aria-hidden='true'>&nbsp;</span>"
+  }
+
+  paste0(
+    "<div class='pub-grid'>",
+    "<span class='pub-slot' title='DOI'>", slot(doi_link), "</span>",
+    "<span class='pub-slot' title='GitHub repository'>", slot(repo_link), "</span>",
+    "<span class='pub-slot' title='Published on GitHub Pages'>", slot(github_link), "</span>",
+    "<span class='pub-slot' title='Published on Posit Connect Cloud'>", slot(pcc_link), "</span>",
+    "</div>"
+  )
+}
+
 if (nrow(repos) == 0) {
-  cat("Repository data is currently unavailable from the GitHub API.")
+  cat("Repository data is currently unavailable from the GitHub API/cache.")
 } else {
-  assessment_repo_names <- if (nrow(assessment_repos) > 0) assessment_repos$repo_name else character(0)
+  assessment_rows <- data.frame()
+  tg_rows <- data.frame()
+  other_rows <- data.frame()
 
+  if (nrow(assessment_repos) > 0) {
+    assessment_repos$assessment_abbreviation <- toupper(assessment_repos$assessment_abbreviation)
+    assessment_repos <- merge(
+      assessment_repos,
+      assessment_lookup,
+      by = "assessment_abbreviation",
+      all.x = TRUE,
+      sort = FALSE
+    )
+    assessment_repos$Assessment <- ifelse(
+      is.na(assessment_repos$Assessment) | !nzchar(assessment_repos$Assessment),
+      assessment_repos$assessment_abbreviation,
+      assessment_repos$Assessment
+    )
+
+    assessment_rows <- data.frame(
+      Category = "Assessment related",
+      Item = assessment_repos$Assessment,
+      Description = ifelse(is.na(assessment_repos$description), "", assessment_repos$description),
+      License = vapply(
+        seq_len(nrow(assessment_repos)),
+        function(i) build_license_html(assessment_repos$license_spdx[i], assessment_repos$license_url[i]),
+        character(1)
+      ),
+      Published = vapply(
+        seq_len(nrow(assessment_repos)),
+        function(i) build_published_links(
+          repo_url = assessment_repos$url[i],
+          repo_name = assessment_repos$repo_name[i],
+          has_pages = assessment_repos$has_pages[i],
+          homepage = assessment_repos$homepage[i],
+          pcc_map_df = pcc_repo_map,
+          doi_value = lookup_repo_doi(assessment_repos$repo_name[i], doi_df = doi_map)
+        ),
+        character(1)
+      ),
+      Archived = format_archived(assessment_repos$archived),
+      Visibility = ifelse(is.na(assessment_repos$visibility), "", assessment_repos$visibility),
+      DOI = vapply(assessment_repos$repo_name, lookup_repo_doi, character(1), doi_df = doi_map),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  if (nrow(tg_pages) > 0) {
+    tg_meta <- repos[repos$repo_name %in% tg_pages$repo_name, c("repo_name", "url", "description", "visibility", "archived", "license_spdx", "license_url", "has_pages", "homepage"), drop = FALSE]
+    tg_table <- merge(tg_pages, tg_meta, by = "repo_name", all.x = TRUE, sort = FALSE)
+
+    tg_rows <- data.frame(
+      Category = "TGs",
+      Item = tg_table$title,
+      Description = ifelse(is.na(tg_table$description), "", tg_table$description),
+      License = vapply(
+        seq_len(nrow(tg_table)),
+        function(i) build_license_html(tg_table$license_spdx[i], tg_table$license_url[i]),
+        character(1)
+      ),
+      Published = vapply(
+        seq_len(nrow(tg_table)),
+        function(i) build_published_links(
+          repo_url = tg_table$url[i],
+          repo_name = tg_table$repo_name[i],
+          has_pages = tg_table$has_pages[i],
+          homepage = tg_table$homepage[i],
+          pcc_map_df = pcc_repo_map,
+          doi_value = lookup_repo_doi(tg_table$repo_name[i], doi_df = doi_map)
+        ),
+        character(1)
+      ),
+      Archived = format_archived(tg_table$archived),
+      Visibility = ifelse(is.na(tg_table$visibility), "", tg_table$visibility),
+      DOI = vapply(tg_table$repo_name, lookup_repo_doi, character(1), doi_df = doi_map),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  assessment_repo_names <- if (nrow(assessment_repos) > 0) assessment_repos$repo_name else character(0)
   other_repos <- repos[
     !(repos$repo_name %in% assessment_repo_names) & !grepl("^IPBES_TG_", repos$repo_name),
     ,
     drop = FALSE
   ]
 
-  if (nrow(other_repos) == 0) {
-    cat("No other repositories found.")
-  } else {
+  if (nrow(other_repos) > 0) {
     other_repos <- other_repos[order(tolower(other_repos$repo_name)), , drop = FALSE]
-    other_repos$Repository <- paste0(
-      "<a href='", other_repos$url, "' target='_blank' rel='noopener'>", other_repos$repo_name, "</a>"
+    other_rows <- data.frame(
+      Category = "Other",
+      Item = other_repos$repo_name,
+      Description = ifelse(is.na(other_repos$description), "", other_repos$description),
+      License = vapply(
+        seq_len(nrow(other_repos)),
+        function(i) build_license_html(other_repos$license_spdx[i], other_repos$license_url[i]),
+        character(1)
+      ),
+      Published = vapply(
+        seq_len(nrow(other_repos)),
+        function(i) build_published_links(
+          repo_url = other_repos$url[i],
+          repo_name = other_repos$repo_name[i],
+          has_pages = other_repos$has_pages[i],
+          homepage = other_repos$homepage[i],
+          pcc_map_df = pcc_repo_map,
+          doi_value = lookup_repo_doi(other_repos$repo_name[i], doi_df = doi_map)
+        ),
+        character(1)
+      ),
+      Archived = format_archived(other_repos$archived),
+      Visibility = ifelse(is.na(other_repos$visibility), "", other_repos$visibility),
+      DOI = vapply(other_repos$repo_name, lookup_repo_doi, character(1), doi_df = doi_map),
+      stringsAsFactors = FALSE
     )
-    other_repos$Description <- other_repos$description
-    other_repos$Archived <- format_archived(other_repos$archived)
+  }
 
-    out <- other_repos[, c("Repository", "Description", "Archived")]
+  unified <- rbind(assessment_rows, tg_rows, other_rows)
+  if (nrow(unified) == 0) {
+    cat("No repositories available to display.")
+  } else {
+    unified$Properties <- vapply(
+      seq_len(nrow(unified)),
+      function(i) build_properties_html(unified$Archived[i], unified$Visibility[i]),
+      character(1)
+    )
+    unified$PropertiesKey <- vapply(
+      seq_len(nrow(unified)),
+      function(i) build_properties_key(unified$Archived[i], unified$Visibility[i]),
+      character(1)
+    )
+    unified$PublishedKey <- vapply(
+      unified$Published,
+      function(x) {
+        parts <- character(0)
+        if (!is.na(x) && grepl("page-repo", x, fixed = TRUE)) parts <- c(parts, "GH")
+        if (!is.na(x) && grepl("page-ghp", x, fixed = TRUE)) parts <- c(parts, "GHP")
+        if (!is.na(x) && grepl("page-pcc", x, fixed = TRUE)) parts <- c(parts, "PCC")
+        if (!is.na(x) && grepl("page-doi", x, fixed = TRUE)) parts <- c(parts, "DOI")
+        paste(parts, collapse = " ")
+      },
+      character(1)
+    )
+    unified$StatusKey <- vapply(
+      seq_len(nrow(unified)),
+      function(i) {
+        parts <- character(0)
+        if (grepl("DOI", unified$PublishedKey[i], fixed = TRUE)) parts <- c(parts, "DOI")
+        if (grepl("GHP", unified$PublishedKey[i], fixed = TRUE)) parts <- c(parts, "GHP")
+        if (grepl("PCC", unified$PublishedKey[i], fixed = TRUE)) parts <- c(parts, "PCC")
+        if (grepl("Archived", unified$PropertiesKey[i], fixed = TRUE)) parts <- c(parts, "Archived")
+        if (grepl("Private", unified$PropertiesKey[i], fixed = TRUE)) parts <- c(parts, "Private")
+        if (length(parts) == 0) "NONE" else paste(parts, collapse = " ")
+      },
+      character(1)
+    )
+    unified <- unified[, c("Category", "Item", "Description", "License", "Published", "Properties", "PropertiesKey", "PublishedKey", "StatusKey")]
 
-    DT::datatable(
-      out,
+    controls <- htmltools::HTML("\
+<div class='repo-scope-filter'>\
+  <strong>Scope 1 (Category)</strong>\
+  <label><input type='radio' name='repo_scope_cat' value='all' checked> All</label>\
+  <label><input type='radio' name='repo_scope_cat' value='assessment'> Assessment related</label>\
+  <label><input type='radio' name='repo_scope_cat' value='tgs'> TGs</label>\
+  <label><input type='radio' name='repo_scope_cat' value='other'> Other</label>\
+</div>\
+<div class='repo-scope-filter'>\
+  <strong>Scope 2 (Status)</strong>\
+  <label><input type='radio' name='repo_scope_pub' value='all' checked> All</label>\
+  <label><input type='radio' name='repo_scope_pub' value='doi'> Have DOIs</label>\
+  <label><input type='radio' name='repo_scope_pub' value='github'> Published on GHP</label>\
+  <label><input type='radio' name='repo_scope_pub' value='pcc'> Published on PCC</label>\
+  <label><input type='radio' name='repo_scope_pub' value='archived'> Archived</label>\
+  <label><input type='radio' name='repo_scope_pub' value='public'> Public</label>\
+  <label><input type='radio' name='repo_scope_pub' value='private'> Private</label>\
+</div>\
+")
+
+    tbl <- DT::datatable(
+      unified,
       escape = FALSE,
       rownames = FALSE,
       filter = "top",
+      elementId = "repo-unified-table",
       options = list(
-        pageLength = 25,
-        autoWidth = TRUE
-      )
+        pageLength = 10,
+        autoWidth = FALSE,
+        order = list(list(0, "asc"), list(1, "asc")),
+        columnDefs = list(
+          list(width = "12%", targets = 0),
+          list(width = "24%", targets = 1),
+          list(width = "31%", targets = 2),
+          list(width = "9%", targets = 3),
+          list(width = "12%", targets = 4),
+          list(width = "12%", targets = 5, orderData = 6),
+          list(targets = 6, visible = FALSE, searchable = TRUE),
+          list(targets = 7, visible = FALSE, searchable = TRUE),
+          list(targets = 8, visible = FALSE, searchable = TRUE)
+        )
+      ),
+      callback = DT::JS("\
+var categoryCol = 0;\
+var pageCol = 4;\
+var propertiesCol = 5;\
+var propertiesKeyCol = 6;\
+var publishedKeyCol = 7;\
+var statusKeyCol = 8;\
+\
+var $container = $(table.table().container());\
+var $ths = $container.find('thead th');\
+$ths.eq(pageCol).css('white-space', 'nowrap');\
+$ths.eq(propertiesCol).attr('title', 'Properties:\\n1. Archived\\n2. Visibility').css('white-space', 'nowrap');\
+var $filterCells = $container.find('thead tr:eq(1) th');\
+if ($filterCells.length > 3) {\
+  $filterCells.eq(3).html('');\
+}\
+if ($filterCells.length > pageCol) {\
+  $filterCells.eq(pageCol).html('');\
+}\
+if ($filterCells.length > propertiesCol) {\
+  $filterCells.eq(propertiesCol).html('');\
+}\
+\
+function applyScopes(catScope, pubScope) {\
+  table.column(categoryCol).search('', true, false);\
+  table.column(pageCol).search('', false, false);\
+  table.column(propertiesKeyCol).search('', false, false);\
+  table.column(publishedKeyCol).search('', false, false);\
+  table.column(statusKeyCol).search('', false, false);\
+\
+  if (catScope === 'assessment') {\
+    table.column(categoryCol).search('^Assessment related$', true, false);\
+  } else if (catScope === 'tgs') {\
+    table.column(categoryCol).search('^TGs$', true, false);\
+  } else if (catScope === 'other') {\
+    table.column(categoryCol).search('^Other$', true, false);\
+  }\
+\
+  if (pubScope === 'doi') {\
+    table.column(publishedKeyCol).search('DOI', false, false);\
+  } else if (pubScope === 'github') {\
+    table.column(publishedKeyCol).search('GHP', false, false);\
+  } else if (pubScope === 'pcc') {\
+    table.column(publishedKeyCol).search('PCC', false, false);\
+  } else if (pubScope === 'archived') {\
+    table.column(propertiesKeyCol).search('Archived', false, false);\
+  } else if (pubScope === 'public') {\
+    table.column(propertiesKeyCol).search('Public', false, false);\
+  } else if (pubScope === 'private') {\
+    table.column(propertiesKeyCol).search('Private', false, false);\
+  }\
+\
+  table.draw();\
+}\
+\
+function getScopesFromUrl() {\
+  var allowedCat = ['all', 'assessment', 'tgs', 'other'];\
+  var allowedPub = ['all', 'doi', 'github', 'pcc', 'archived', 'public', 'private'];\
+  var params = new URLSearchParams(window.location.search);\
+  var cat = (params.get('scope_cat') || '').toLowerCase();\
+  var pub = (params.get('scope_pub') || '').toLowerCase();\
+  if (allowedCat.indexOf(cat) < 0) cat = 'all';\
+  if (allowedPub.indexOf(pub) < 0) pub = 'all';\
+\
+  var legacy = (params.get('scope') || '').toLowerCase();\
+  if (legacy && legacy !== 'all') {\
+    if (allowedCat.indexOf(legacy) >= 0) cat = legacy;\
+    if (allowedPub.indexOf(legacy) >= 0) pub = legacy;\
+  }\
+\
+  return {cat: cat, pub: pub};\
+}\
+\
+$(document).off('change.repoScopeCat').on('change.repoScopeCat', 'input[name=\"repo_scope_cat\"]', function() {\
+  var cat = $('input[name=\"repo_scope_cat\"]:checked').val() || 'all';\
+  var pub = $('input[name=\"repo_scope_pub\"]:checked').val() || 'all';\
+  applyScopes(cat, pub);\
+});\
+\
+$(document).off('change.repoScopePub').on('change.repoScopePub', 'input[name=\"repo_scope_pub\"]', function() {\
+  var cat = $('input[name=\"repo_scope_cat\"]:checked').val() || 'all';\
+  var pub = $('input[name=\"repo_scope_pub\"]:checked').val() || 'all';\
+  applyScopes(cat, pub);\
+});\
+\
+var initialScopes = getScopesFromUrl();\
+$('input[name=\"repo_scope_cat\"][value=\"' + initialScopes.cat + '\"]').prop('checked', true);\
+$('input[name=\"repo_scope_pub\"][value=\"' + initialScopes.pub + '\"]').prop('checked', true);\
+applyScopes(initialScopes.cat, initialScopes.pub);\
+")
     )
+
+    htmltools::browsable(htmltools::tagList(
+      controls,
+      tbl,
+      htmltools::tags$div(style = "margin-top:0.5rem;color:#2f3f2a;", paste0("Repository source: ", repo_source, "."))
+    ))
   }
 }
 ```

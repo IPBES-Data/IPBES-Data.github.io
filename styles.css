@@ -61,14 +61,30 @@ body {
 
 .hero-actions {
   margin-top: 1.1rem;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.hero-actions-row {
+  display: block;
+}
+
+.hero-actions-row p {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
 .hero-actions a {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.hero-actions-row p a:only-child {
+  grid-column: 1 / -1;
 }
 
 .btn-main,
@@ -83,9 +99,10 @@ body {
 }
 
 .btn-main {
-  background: linear-gradient(140deg, var(--accent), #238555);
-  color: #fff;
-  box-shadow: 0 14px 28px rgba(15, 107, 72, 0.25);
+  background: linear-gradient(140deg, #2d9a67, #3faa77);
+  color: #f8fff9;
+  border-color: rgba(16, 67, 42, 0.22);
+  box-shadow: 0 10px 20px rgba(15, 107, 72, 0.14);
 }
 
 .btn-main:hover,
@@ -125,11 +142,164 @@ body {
   font-size: 0.86rem;
 }
 
+.metric-card-group .metric-value,
+.metric-card-group .metric-label {
+  margin: 0;
+}
+
+.metric-link-main {
+  color: inherit;
+  text-decoration: none;
+}
+
+.metric-link-main:hover {
+  text-decoration: underline;
+}
+
+.metric-sublist {
+  margin: 0.45rem 0 0;
+  padding-left: 1rem;
+}
+
+.metric-sublist li {
+  margin: 0.16rem 0;
+  color: var(--ink-soft);
+}
+
+.metric-sublist a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.metric-sublist a:hover {
+  text-decoration: underline;
+}
+
 h2 {
   margin-top: 2.3rem;
   margin-bottom: 0.75rem;
   font-size: 1.45rem;
   letter-spacing: -0.015em;
+}
+
+.repo-scope-filter {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(251, 253, 247, 0.9);
+}
+
+.repo-scope-filter strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.repo-scope-filter label {
+  margin-right: 1rem;
+  white-space: nowrap;
+}
+
+#repo-unified-table table.dataTable {
+  width: 100% !important;
+  table-layout: fixed;
+}
+
+#repo-unified-table table.dataTable th,
+#repo-unified-table table.dataTable td {
+  word-wrap: break-word;
+  font-size: 0.82rem;
+}
+
+#repo-unified-table table.dataTable thead th {
+  white-space: nowrap;
+  font-size: 0.82rem;
+  text-align: left;
+  padding-right: 1.65rem !important;
+  border-right: 1px solid var(--line);
+}
+
+#repo-unified-table table.dataTable thead th:last-child {
+  border-right: none;
+}
+
+#repo-unified-table table.dataTable th:nth-child(4),
+#repo-unified-table table.dataTable td:nth-child(4) {
+  min-width: 7.5rem;
+  text-align: center;
+}
+
+#repo-unified-table table.dataTable th:nth-child(5),
+#repo-unified-table table.dataTable td:nth-child(5) {
+  min-width: 10rem;
+}
+
+#repo-unified-table table.dataTable th:nth-child(6),
+#repo-unified-table table.dataTable td:nth-child(6) {
+  min-width: 6.25rem;
+}
+
+#repo-unified-table .dataTables_filter,
+#repo-unified-table .form-control {
+  font-size: 0.88rem;
+}
+
+#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(4) .form-group,
+#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(5) .form-group,
+#repo-unified-table table.dataTable thead tr:nth-child(2) th:nth-child(6) .form-group {
+  display: none !important;
+}
+
+#repo-unified-table .prop-slot {
+  display: inline-block;
+  width: 2.25em;
+  text-align: center;
+  line-height: 1.1;
+}
+
+#repo-unified-table td:nth-child(4) {
+  white-space: normal;
+}
+
+#repo-unified-table .license-badge {
+  display: inline-block;
+  height: 1.2rem;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+#repo-unified-table .pub-link {
+  display: inline-block;
+  margin-right: 0;
+}
+
+#repo-unified-table .pub-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 2.45em);
+  grid-template-rows: repeat(2, 1.25em);
+  gap: 0.1rem 0.2rem;
+  align-items: center;
+}
+
+#repo-unified-table .pub-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#repo-unified-table .pub-empty {
+  display: inline-block;
+  width: 2.15em;
+  height: 1.08em;
+}
+
+#repo-unified-table .prop-status-icon,
+#repo-unified-table .doi-logo-icon {
+  width: 2.15em;
+  height: 1.08em;
+  vertical-align: text-bottom;
 }
 
 @keyframes rise {
@@ -156,6 +326,10 @@ h2 {
 @media (max-width: 700px) {
   .hero-panel {
     padding: 1.2rem;
+  }
+
+  .hero-actions-row p {
+    grid-template-columns: 1fr;
   }
 
   .hero-metrics {
