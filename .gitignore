@@ -48,3 +48,18 @@ rsconnect/
 IPBES-Data.github.io.code-workspace
 
 /.quarto/
+
+/docs/
+/_site/
+
+**/*.quarto_ipynb
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd

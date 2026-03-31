@@ -1,21 +1,35 @@
 project:
   type: website
-  output-dir: docs
+  output-dir: _site
+  resources:
+    - assets/icons/**
+  post-render:
+    - Rscript scripts/inject_footer_version.R
+  render:
+    - index.qmd
+    - about.qmd
+    - Propertydetection.qmd
+    - repos.qmd
+    - news.qmd
+    - development.qmd
 
 website:
-  title: "PBES Data Unit"
+  title: "IPBES Data Unit"
   navbar:
     left:
       - href: index.qmd
         text: Home
-      - about.qmd
+      - text: About
+        menu:
+          - about.qmd
+          - Propertydetection.qmd
       - repos.qmd
+  page-footer:
+    left: "[News](news.qmd) | [Development](development.qmd)"
+    right: "Website version: SITE_VERSION_TOKEN | Data fetched: DATA_FETCHED_TOKEN UTC"
 
 format:
   html:
     theme: cosmo
     css: styles.css
     toc: true
-
-
-

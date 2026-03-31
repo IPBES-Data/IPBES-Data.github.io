@@ -1,12 +1,75 @@
 ---
 title: "IPBES Data Unit"
+format:
+  html:
+    toc: false
 ---
 
-## This website is under construction
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
 
+source("scripts/site_data_utils.R")
 
-Welcome to the IPBES Data Unit website.
+tg_directory_page <- "https://ipbes-data.github.io/IPBES_TG_Directory/"
 
-This site is still under development.
-Please go to the [IPBES-Data GitHub repository](https://github.com/IPBES-Data) to see the latest developments.
+inputs <- load_site_inputs()
+assessments <- inputs$assessments
+tg_labels_fallback <- inputs$tg_labels_fallback
 
+repo_result <- get_org_repos_for_index(org = "IPBES-Data")
+org_repos <- repo_result$data
+doi_map <- get_repo_doi_map(org_repos)
+pcc_repo_map <- get_repo_pcc_map(org_repos)
+
+tg_result <- load_tg_labels(tg_labels_fallback, directory_url = tg_directory_page)
+tg_pages <- tg_result$data
+
+if (nrow(org_repos) > 0 && nrow(tg_pages) > 0) {
+  tg_repo_names <- org_repos$repo_name[grepl("^IPBES_TG_", org_repos$repo_name)]
+  tg_pages <- tg_pages[tg_pages$repo_name %in% tg_repo_names, , drop = FALSE]
+  tg_pages <- order_tg_labels(tg_pages)
+}
+
+assessment_repo_summary <- summarize_assessment_repositories(org_repos, assessments, repo_name_col = "repo_name")
+
+n_assessment_repositories <- assessment_repo_summary$n_repositories
+n_tg_repos <- nrow(tg_pages)
+n_all_repositories <- as.integer(nrow(org_repos))
+n_other_repositories <- max(0L, as.integer(nrow(org_repos) - n_assessment_repositories - n_tg_repos))
+n_connect_cloud_apps <- nrow(pcc_repo_map)
+n_github_pages <- if ("has_pages" %in% names(org_repos)) as.integer(sum(org_repos$has_pages %in% TRUE, na.rm = TRUE)) else 0L
+n_published_total <- as.integer(n_github_pages + n_connect_cloud_apps)
+n_have_doi <- if (nrow(doi_map) > 0) as.integer(sum(!is.na(doi_map$doi) & nzchar(doi_map$doi))) else 0L
+```
+
+::: {.hero-panel}
+::: {.hero-copy}
+{{< include content/home/hero.md >}}
+:::
+
+::: {.hero-metrics}
+::: {.metric-card .metric-card-group}
+<p class="metric-value"><a class="metric-link-main" href="repos.html?scope=all#repository-explorer">`r n_all_repositories`</a></p>
+<p class="metric-label"><a class="metric-link-main" href="repos.html?scope=all#repository-explorer">Repositories on GitHub</a></p>
+<ul class="metric-sublist">
+  <li><a href="repos.html?scope=assessment#repository-explorer">`r n_assessment_repositories` Assessment related</a></li>
+  <li><a href="repos.html?scope=tgs#repository-explorer">`r n_tg_repos` Technical Guidelines</a></li>
+  <li><a href="repos.html?scope=other#repository-explorer">`r n_other_repositories` Other</a></li>
+</ul>
+:::
+::: {.metric-card .metric-card-group}
+<p class="metric-value"><a class="metric-link-main" href="repos.html?scope=published#repository-explorer">`r n_published_total`</a></p>
+<p class="metric-label"><a class="metric-link-main" href="repos.html?scope=published#repository-explorer">Published</a></p>
+<ul class="metric-sublist">
+  <li><a href="repos.html?scope=github#repository-explorer">`r n_github_pages` GitHub Pages</a></li>
+  <li><a href="repos.html?scope=pcc#repository-explorer">`r n_connect_cloud_apps` Posit Connect Cloud</a></li>
+</ul>
+:::
+::: {.metric-card}
+<p class="metric-value"><a class="metric-link-main" href="repos.html?scope=doi#repository-explorer">`r n_have_doi`</a></p>
+<p class="metric-label"><a class="metric-link-main" href="repos.html?scope=doi#repository-explorer">Have DOIs</a></p>
+:::
+:::
+:::
