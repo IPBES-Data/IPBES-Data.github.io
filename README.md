@@ -8,7 +8,7 @@ The website is hosted on GitHub Pages. The website is available at [https://ipbe
 
 - Version: derived from latest `NEWS.md` date as `vYYYY.MM.DD`
 - Change log: see `NEWS.md`
-- Contributors: see `CONTRIBUTORS.md`
+- Development notes: see `DEVELOPMENT.md`
 
 ## Build
 

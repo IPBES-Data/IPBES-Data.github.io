@@ -34,7 +34,6 @@ if (nrow(org_repos) > 0 && nrow(tg_pages) > 0) {
 
 assessment_repo_summary <- summarize_assessment_repositories(org_repos, assessments, repo_name_col = "repo_name")
 
-n_assessments <- assessment_repo_summary$n_assessments
 n_assessment_repositories <- assessment_repo_summary$n_repositories
 n_tg_repos <- nrow(tg_pages)
 n_all_repositories <- as.integer(nrow(org_repos))
@@ -51,10 +50,6 @@ n_have_doi <- if (nrow(doi_map) > 0) as.integer(sum(!is.na(doi_map$doi) & nzchar
 :::
 
 ::: {.hero-metrics}
-::: {.metric-card}
-<p class="metric-value">`r n_assessments`</p>
-<p class="metric-label">Assessments</p>
-:::
 ::: {.metric-card .metric-card-group}
 <p class="metric-value"><a class="metric-link-main" href="repos.html?scope=all#repository-explorer">`r n_all_repositories`</a></p>
 <p class="metric-label"><a class="metric-link-main" href="repos.html?scope=all#repository-explorer">Repositories on GitHub</a></p>

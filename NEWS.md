@@ -1,5 +1,27 @@
 # NEWS
 
+## 2026-03-31
+
+### Navigation and Naming
+- Renamed the contributors page and source files to development naming:
+  - `contributors.qmd` -> `development.qmd`
+  - `CONTRIBUTORS.md` -> `DEVELOPMENT.md`
+- Updated footer navigation label and links to `Development`.
+
+### Landing Page
+- Removed the top-right `Assessments` metric pill from the landing page hero metrics.
+- Included latest manual content updates in the About page source.
+
+### Repository Explorer
+- Re-enabled column filters for `License`, `Published`, and `Properties`.
+- Added searchable hidden text tokens behind icons so those three filters work with terms such as `MIT`, `DOI`, `GHP`, `PCC`, `Archived`, `Public`, and `Private`.
+- Updated visibility icon tooltip text to show `Public` or `Private` (instead of generic `Visibility`).
+- Added refreshed timestamp display in the repository source line:
+  - `Repository source: <source> (refreshed: YYYY-MM-DD HH:MM UTC)`.
+
+### Data Refresh
+- Refreshed repository DOI/PCC cache snapshots after parser and rendering updates.
+
 ## 2026-03-24
 
 ### Automation
@@ -63,8 +85,8 @@
 - Continued deployment target to the `gh-pages` branch via GitHub Actions.
 
 ### Navigation and Footer
-- Kept `News` and `Contributors` available in the footer links.
-- Ensured `news.qmd` and `contributors.qmd` remain in the Quarto render list so linked pages are generated.
+- Kept `News` and `Development` available in the footer links.
+- Ensured `news.qmd` and `development.qmd` remain in the Quarto render list so linked pages are generated.
 
 ### Simplification
 - Removed obsolete home content files no longer used by the current hero-only landing layout.
@@ -109,7 +131,7 @@
 ### Website and Navigation
 - Reworked the landing page with structured sections, responsive layout, and improved styling.
 - Added data-driven content blocks for assessments and technical guidelines.
-- Added dedicated pages for `NEWS` and `Contributors` and linked them in the website navigation.
+- Added dedicated pages for `NEWS` and `Development` and linked them in the website navigation.
 
 ### Assessment Directories
 - Switched assessment links to published GitHub Pages under `IPBES_Assessment_Directories`.

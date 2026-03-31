@@ -11,7 +11,7 @@ project:
     - Propertydetection.qmd
     - repos.qmd
     - news.qmd
-    - contributors.qmd
+    - development.qmd
 
 website:
   title: "IPBES Data Unit"
@@ -25,7 +25,7 @@ website:
           - Propertydetection.qmd
       - repos.qmd
   page-footer:
-    left: "[News](news.qmd) | [Contributors](contributors.qmd)"
+    left: "[News](news.qmd) | [Development](development.qmd)"
     right: "Website version: SITE_VERSION_TOKEN | Data fetched: DATA_FETCHED_TOKEN UTC"
 
 format:
