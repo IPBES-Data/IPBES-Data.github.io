@@ -58,7 +58,8 @@ IPBES-Data.github.io.code-workspace
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon?
+# Keep macOS special Icon files out of git, but do not ignore normal "icons" directories.
+# (The old `Icon?` pattern can match `icons` on case-insensitive filesystems.)
 ._*
 .Spotlight-V100
 .Trashes
