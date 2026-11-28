@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 32" role="img" aria-label="Private">
+  <rect x="1" y="1" width="62" height="30" rx="4" fill="#f5efef" stroke="#8c6f6f"/>
+  <rect x="15" y="14" width="10" height="10" rx="1.5" fill="none" stroke="#6d3c3c" stroke-width="2"/>
+  <path d="M17 14v-3a3 3 0 0 1 6 0v3" fill="none" stroke="#6d3c3c" stroke-width="2"/>
+  <text x="30" y="21" font-size="10" font-family="Arial, sans-serif" fill="#6d3c3c">PRIV</text>
+</svg>
